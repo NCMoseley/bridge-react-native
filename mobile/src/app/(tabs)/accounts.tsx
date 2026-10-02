@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   FlatList,
+  Pressable,
   RefreshControl,
   StyleSheet,
   Text,
   View,
 } from 'react-native'
+import { Link } from 'expo-router'
 import { getJson } from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 import { Card, Spinner, Stat, colors, pnlColor } from '../../components/ui'
@@ -36,6 +38,11 @@ function AccountCard({
 }) {
   const balance = item.internalBalanceCents
   return (
+    <Link
+      href={`/account-pnl?accountId=${encodeURIComponent(item.account.id)}`}
+      asChild
+    >
+      <Pressable>
     <Card>
       <View style={styles.cardHeader}>
         <Text style={styles.accountName}>
@@ -86,6 +93,8 @@ function AccountCard({
         ) : null}
       </View>
     </Card>
+      </Pressable>
+    </Link>
   )
 }
 
