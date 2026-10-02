@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="popup.css">
+    <title>Tradovate Bridge</title>
+  </head>
+  <body>
+    <main>
+      <p class="eyebrow">TRADINGVIEW TO TRADOVATE</p>
+      <h1>Tradovate Bridge</h1>
+      <p class="subtitle">Review incoming order drafts before entering them in Tradovate.</p>
+      <button id="open-review" class="primary-action" type="button">Open order review</button>
+      <form id="settings-form">
+        <label>
+          Bridge URL
+          <input id="bridge-url" type="url" placeholder="https://tradovate-browser-bridge.onrender.com" required>
+        </label>
+        <label>
+          Extension token
+          <input id="extension-token" type="password" autocomplete="off" required>
+        </label>
+        <label>
+          Tradovate overlay position
+          <select id="overlay-position">
+            <option value="bottom-right">Bottom right</option>
+            <option value="bottom-left">Bottom left</option>
+            <option value="top-right">Top right</option>
+            <option value="top-left">Top left</option>
+          </select>
+        </label>
+        <button type="submit">Save connection</button>
+      </form>
+      <p id="connection-status" role="status"></p>
+    </main>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

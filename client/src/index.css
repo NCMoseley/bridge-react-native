@@ -1,0 +1,1436 @@
+@import "tailwindcss";
+
+@theme {
+  /* Indigo shifted a touch toward royal blue (hue ~225°) */
+  --color-indigo-100: #dfe9ff;
+  --color-indigo-300: #9db5fd;
+  --color-indigo-400: #7a97fb;
+  --color-indigo-500: #5272f2;
+  --color-indigo-600: #3f5de6;
+  --color-indigo-700: #3048cb;
+  --color-indigo-900: #2a3a8f;
+  --color-indigo-950: #1c2558;
+
+  /* Brand / positive green */
+  --color-positive: #51e2b0;
+  --color-positive-100: #d1fae5;
+  --color-positive-400: #34d399;
+  --color-positive-500: #10b981;
+  --color-positive-600: #059669;
+  --color-positive-700: #047857;
+  --color-positive-900: #064e3b;
+  --color-positive-950: #022c22;
+
+  /* Loss / negative red */
+  --color-negative: #f87171;
+  --color-negative-100: #fee2e2;
+  --color-negative-200: #fecaca;
+  --color-negative-300: #fca5a5;
+  --color-negative-400: #f87171;
+  --color-negative-500: #ef4444;
+  --color-negative-600: #dc2626;
+  --color-negative-700: #b91c1c;
+  --color-negative-900: #7f1d1d;
+  --color-negative-950: #450a0a;
+
+  /* Red-folder news — fixed red in every theme so high-impact days
+     are never ambiguous (Optimist greys out red-*, these stay red) */
+  --color-redfolder-400: #f87171;
+  --color-redfolder-500: #ef4444;
+  --color-redfolder-600: #dc2626;
+  --color-redfolder-900: #7f1d1d;
+  --color-redfolder-950: #450a0a;
+}
+
+html.theme-castrol {
+  --color-slate-50: #020617;
+  --color-slate-100: #0f172a;
+  --color-slate-200: #1e293b;
+  --color-slate-300: #334155;
+  --color-slate-400: #475569;
+  --color-slate-500: #64748b;
+  --color-slate-600: #94a3b8;
+  --color-slate-700: #cbd5e1;
+  --color-slate-800: #e2e8f0;
+  --color-slate-900: #f8fafc;
+  --color-slate-950: #ffffff;
+
+  /* Brand accent: blue buttons/accents. Light-theme convention: low
+     numbers are dark text colors on light surfaces, 900/950 are light
+     tints — same inversion as slate. */
+  --color-indigo-100: #1e40af;
+  --color-indigo-300: #2563eb;
+  --color-indigo-400: #3b82f6;
+  --color-indigo-500: #3b82f6;
+  --color-indigo-600: #2563eb;
+  --color-indigo-700: #1d4ed8;
+  --color-indigo-900: #dbeafe;
+  --color-indigo-950: #eff6ff;
+
+  /* Wins/positive P&L in the wordmark's racing green */
+  --color-positive: #00a651;
+  --color-positive-400: #00a651;
+  /* Dark win/loss pills invert to tinted chips with dark text */
+  --color-positive-100: #065f46;
+  --color-positive-900: #c9f0dd;
+  --color-positive-950: #c9f0dd;
+  --color-negative-100: #991b1b;
+  --color-negative-200: #b91c1c;
+  --color-negative-300: #dc2626;
+  --color-negative-400: #dc2626;
+  --color-negative-900: #fad7d9;
+  --color-negative-950: #fad7d9;
+
+  /* Light-on-dark tints get dark counterparts for contrast on light surfaces */
+  --color-amber-100: #92400e;
+  --color-amber-200: #92400e;
+  --color-amber-300: #b45309;
+  --color-amber-400: #d97706;
+  --color-amber-600: #b45309;
+  --color-amber-700: #92400e;
+  --color-amber-900: #fef3c7;
+  --color-amber-950: #fffbeb;
+  --color-blue-100: #1e40af;
+  --color-blue-400: #2563eb;
+  --color-blue-900: #dbeafe;
+  /* Pale/light text used on tinted washes inverts to dark text; dark pill
+     backgrounds invert to light tints — same convention as positive/negative */
+  --color-red-300: #b91c1c;
+  --color-red-400: #dc2626;
+  --color-red-900: #fee2e2;
+  --color-rose-100: #9f1239;
+  --color-rose-300: #9f1239;
+  --color-rose-900: #ffe4e6;
+  --color-orange-100: #9a3412;
+  --color-teal-900: #ccfbf1;
+  --color-green-400: #15803d;
+  --color-redfolder-400: #dc2626;
+  --color-emerald-50: #02331a;
+  --color-emerald-100: #04522a;
+  --color-emerald-200: #057a49;
+  --color-emerald-300: #0b966e;
+  --color-emerald-400: #0b966e;
+  --color-emerald-900: #d1fae5;
+  --color-emerald-950: #dcf5e7;
+  --color-orange-400: #c2410c;
+  --color-purple-400: #7e22ce;
+  --color-purple-500: #7e22ce;
+  --color-rose-400: #e11d48;
+  --color-teal-100: #0f766e;
+}
+
+html.theme-glass {
+  --color-slate-50: #020617;
+  --color-slate-100: #0f172a;
+  --color-slate-200: #1e293b;
+  --color-slate-300: #334155;
+  --color-slate-400: #475569;
+  --color-slate-500: #64748b;
+  --color-slate-600: #94a3b8;
+  --color-slate-700: rgb(255 255 255 / 0.55);
+  --color-slate-800: rgb(255 255 255 / 0.5);
+  --color-slate-900: rgb(255 255 255 / 0.62);
+  --color-slate-950: rgb(255 255 255 / 0.78);
+
+  /* Brand accent: blue buttons/accents. Light-theme convention: low
+     numbers are dark text colors on light surfaces, 900/950 are light
+     tints — same inversion as slate. */
+  --color-indigo-100: #1e40af;
+  --color-indigo-300: #2563eb;
+  --color-indigo-400: #3b82f6;
+  --color-indigo-500: #3b82f6;
+  --color-indigo-600: #2563eb;
+  --color-indigo-700: #1d4ed8;
+  --color-indigo-900: rgb(219 234 254 / 0.65);
+  --color-indigo-950: rgb(239 246 255 / 0.7);
+
+  /* Wins/positive P&L in the wordmark's racing green */
+  --color-positive: #00a651;
+  --color-positive-400: #00a651;
+  /* Dark win/loss pills invert to tinted chips with dark text */
+  --color-positive-100: #065f46;
+  --color-positive-900: rgb(201 240 221 / 0.6);
+  --color-positive-950: rgb(201 240 221 / 0.6);
+  --color-negative-100: #991b1b;
+  --color-negative-200: #b91c1c;
+  --color-negative-300: #dc2626;
+  --color-negative-400: #dc2626;
+  --color-negative-900: rgb(250 215 217 / 0.6);
+  --color-negative-950: rgb(250 215 217 / 0.6);
+
+  /* Light-on-dark tints get dark counterparts for contrast on light surfaces */
+  --color-amber-100: #92400e;
+  --color-amber-200: #92400e;
+  --color-amber-300: #b45309;
+  --color-amber-400: #d97706;
+  --color-amber-600: #b45309;
+  --color-amber-700: #92400e;
+  --color-amber-900: rgb(254 243 199 / 0.6);
+  --color-amber-950: rgb(255 251 235 / 0.7);
+  --color-blue-100: #1e40af;
+  --color-blue-400: #2563eb;
+  --color-blue-900: rgb(219 234 254 / 0.65);
+  /* Pale/light text used on tinted washes inverts to dark text; dark pill
+     backgrounds invert to light tints — same convention as positive/negative */
+  --color-red-300: #b91c1c;
+  --color-red-400: #dc2626;
+  --color-red-900: rgb(254 226 226 / 0.6);
+  --color-rose-100: #9f1239;
+  --color-rose-300: #9f1239;
+  --color-rose-900: rgb(255 228 230 / 0.6);
+  --color-orange-100: #9a3412;
+  --color-teal-900: rgb(204 251 241 / 0.6);
+  --color-green-400: #15803d;
+  --color-redfolder-400: #dc2626;
+  --color-emerald-50: #02331a;
+  --color-emerald-100: #04522a;
+  --color-emerald-200: #057a49;
+  --color-emerald-300: #0b966e;
+  --color-emerald-400: #0b966e;
+  --color-emerald-900: rgb(209 250 229 / 0.6);
+  --color-emerald-950: rgb(220 245 231 / 0.7);
+  --color-orange-400: #c2410c;
+  --color-purple-400: #7e22ce;
+  --color-purple-500: #7e22ce;
+  --color-rose-400: #e11d48;
+  --color-teal-100: #0f766e;
+}
+
+
+/* Glass — light theme with translucent surfaces over a soft cool backdrop.
+   Every slate-surfaced element frosts; borders become pale hairlines. */
+/* Glass — modeled on iOS Liquid Glass: near-colorless frosted surfaces over a
+   pale blue-grey field. The glass reads through three cues: backdrop blur,
+   a bright specular top edge, and a soft ambient shadow. */
+html.theme-glass body {
+  background:
+    radial-gradient(1400px 700px at 20% -15%, rgba(191, 213, 240, 0.55), transparent 60%),
+    radial-gradient(1000px 600px at 85% -5%, rgba(199, 210, 238, 0.4), transparent 55%),
+    radial-gradient(1100px 800px at 50% 115%, rgba(210, 221, 236, 0.5), transparent 60%),
+    linear-gradient(170deg, #edf1f7, #f3f5f9 45%, #e8ecf2);
+  background-attachment: fixed;
+  color: #0f172a;
+}
+
+html.theme-glass [class*="bg-slate-"],
+html.theme-glass [class*="bg-positive-"],
+html.theme-glass [class*="bg-negative-"],
+html.theme-glass [class*="bg-amber-"],
+html.theme-glass [class*="bg-indigo-"],
+html.theme-glass [class*="bg-blue-"],
+html.theme-glass [class*="bg-emerald-"],
+html.theme-glass [class*="bg-rose-"],
+html.theme-glass [class*="bg-teal-"],
+html.theme-glass [class*="bg-orange-"],
+html.theme-glass [class*="bg-purple-"] {
+  backdrop-filter: blur(18px) saturate(1.5);
+  -webkit-backdrop-filter: blur(18px) saturate(1.5);
+}
+
+/* Specular edge + ambient shadow — the cues that make a surface read as glass
+   rather than plain translucency. Applied to card/panel-scale rounded boxes. */
+/* Specular edge + ambient shadow — the cues that make a surface read as glass
+   rather than plain translucency. Applied to card/panel-scale rounded boxes. */
+html.theme-glass .rounded-xl,
+html.theme-glass .rounded-2xl,
+html.theme-glass .rounded-lg,
+html.theme-glass .rounded[class*="bg-"],
+html.theme-glass .rounded-md[class*="bg-"] {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    inset 0 -1px 0 rgba(15, 23, 42, 0.04),
+    0 12px 32px rgba(30, 41, 59, 0.1);
+}
+
+/* Gauge specular sheen — only the glass themes show the highlight arc. */
+.gauge-gloss { display: none; }
+html.theme-glass .gauge-gloss,
+html.theme-glassdark .gauge-gloss { display: block; }
+
+html.theme-glass input[type="month"],
+html.theme-glass input[type="datetime-local"] {
+  color-scheme: light;
+}
+
+html.theme-glass input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  filter: invert(0);
+}
+
+
+/* Form fields get the same material: translucent fill, pale hairline border,
+   inner top highlight — matches the card glass instead of flat grey. */
+html.theme-glass input:not([type="checkbox"]):not([type="radio"]),
+html.theme-glass select,
+html.theme-glass textarea {
+  background-color: rgb(255 255 255 / 0.38) !important;
+  border-color: rgb(30 41 59 / 0.1) !important;
+  border-radius: 0.5rem !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    inset 0 -1px 2px rgba(30, 41, 59, 0.04),
+    0 2px 6px rgba(30, 41, 59, 0.06) !important;
+}
+
+html.theme-glass input:not([type="checkbox"]):not([type="radio"]):focus,
+html.theme-glass select:focus,
+html.theme-glass textarea:focus {
+  background-color: rgb(255 255 255 / 0.6);
+  border-color: rgb(59 130 246 / 0.45);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 0 0 3px rgb(59 130 246 / 0.18),
+    0 2px 8px rgba(30, 41, 59, 0.08) !important;
+  outline: none;
+}
+
+/* Neon — synthwave sunset: deep indigo night, magenta horizon band,
+   golden sun, cyan grid lines */
+html.theme-ultra {
+  --color-slate-50: #fdf5ff;
+  --color-slate-100: #f7ebff;
+  --color-slate-200: #ecd9ff;
+  --color-slate-300: #d8b4fe;
+  --color-slate-400: #b98ef5;
+  --color-slate-500: #9d5ce8;
+  --color-slate-600: #6b2fbf;
+  --color-slate-700: #4a1d8f;
+  --color-slate-800: #2e0f63;
+  --color-slate-900: #20094a;
+  --color-slate-950: #150630;
+
+  --color-indigo-100: #ffe0f2;
+  --color-indigo-300: #ff9ed9;
+  --color-indigo-400: #ff6ec7;
+  --color-indigo-500: #ff2ea6;
+  --color-indigo-600: #e0118c;
+  --color-indigo-700: #b80d74;
+  --color-indigo-900: #6d0a4d;
+  --color-indigo-950: #46052f;
+
+  --color-positive: #ffd23f;
+  --color-positive-100: #fff3c4;
+  --color-positive-400: #ffd23f;
+  --color-positive-500: #f5b81f;
+  --color-positive-600: #d99a10;
+  --color-positive-700: #a87308;
+  --color-positive-900: #5c420a;
+  --color-positive-950: #3a2a06;
+
+  --color-negative: #ff3d7f;
+  --color-negative-100: #ffd9e6;
+  --color-negative-200: #ffb3cd;
+  --color-negative-300: #ff8cb4;
+  --color-negative-400: #ff4d8a;
+  --color-negative-500: #ff2e6e;
+  --color-negative-600: #e0115a;
+  --color-negative-700: #b00d49;
+  --color-negative-900: #66082c;
+  --color-negative-950: #3d051b;
+
+  --color-amber-100: #ffe3b3;
+  --color-amber-300: #ffc266;
+  --color-amber-400: #ffa53d;
+  --color-amber-500: #ff8a1a;
+  --color-amber-600: #e66f00;
+
+  --color-emerald-100: #c9faf0;
+  --color-emerald-200: #8ff2dd;
+  --color-emerald-300: #5ce9cd;
+  --color-emerald-400: #2ce5c0;
+  --color-emerald-500: #19d4ae;
+  --color-emerald-600: #00b3a0;
+
+  --color-blue-100: #b8f1ff;
+  --color-blue-400: #00d5ff;
+  --color-blue-500: #00bce8;
+  --color-blue-600: #00a0cc;
+
+  --color-rose-400: #ff6b9d;
+  --color-rose-600: #e0286f;
+  --color-rose-900: #6d0e3f;
+
+  --color-teal-100: #99f6e4;
+  --color-orange-400: #ff8a3d;
+  --color-purple-400: #d8b4fe;
+  --color-purple-500: #c084fc;
+}
+
+html.theme-ultra body {
+  background: linear-gradient(180deg, #38105e 0%, #20083f 38%, #100329 72%, #05010c 100%) fixed;
+  color: #f7ebff;
+}
+
+/* Barbie House — original dark neon: deep purple night, hot magenta,
+   neon green / cyan */
+html.theme-barbie {
+  --color-slate-50: #faf5ff;
+  --color-slate-100: #f3e8ff;
+  --color-slate-200: #e9d5ff;
+  --color-slate-300: #d8b4fe;
+  --color-slate-400: #c084fc;
+  --color-slate-500: #a855f7;
+  --color-slate-600: #7e22ce;
+  --color-slate-700: #5b21b6;
+  --color-slate-800: #3b0764;
+  --color-slate-900: #1e0538;
+  --color-slate-950: #12021f;
+
+  --color-indigo-100: #fae8ff;
+  --color-indigo-300: #f0abfc;
+  --color-indigo-400: #e879f9;
+  --color-indigo-500: #ff2bd6;
+  --color-indigo-600: #d600b8;
+  --color-indigo-700: #a8008f;
+  --color-indigo-900: #701a75;
+  --color-indigo-950: #4a044e;
+
+  --color-positive: #39ff14;
+  --color-positive-100: #d9ffc7;
+  --color-positive-400: #39ff14;
+  --color-positive-500: #22d30e;
+  --color-positive-600: #16a80a;
+  --color-positive-700: #0f7a08;
+  --color-positive-900: #0a4a06;
+  --color-positive-950: #062e04;
+
+  --color-negative: #ff2e88;
+  --color-negative-100: #ffd6e8;
+  --color-negative-200: #ffadd2;
+  --color-negative-300: #ff85bd;
+  --color-negative-400: #ff2e88;
+  --color-negative-500: #ff0066;
+  --color-negative-600: #d60055;
+  --color-negative-700: #ad0046;
+  --color-negative-900: #66002b;
+  --color-negative-950: #40001b;
+
+  --color-amber-100: #fef08a;
+  --color-amber-300: #fde047;
+  --color-amber-400: #ffe600;
+  --color-amber-500: #ffd700;
+  --color-amber-600: #e6c200;
+
+  --color-emerald-100: #a7f3d0;
+  --color-emerald-200: #6ef7c1;
+  --color-emerald-300: #34f5a5;
+  --color-emerald-400: #00ffa3;
+  --color-emerald-500: #00e68f;
+  --color-emerald-600: #00cc7f;
+
+  --color-blue-100: #c9f7ff;
+  --color-blue-400: #00e5ff;
+  --color-blue-500: #00c8f0;
+  --color-blue-600: #00a8d8;
+
+  --color-rose-400: #ff4d94;
+  --color-rose-600: #e0116e;
+  --color-rose-900: #6d0a3f;
+
+  --color-teal-100: #99f6e4;
+  --color-orange-400: #ffaa00;
+  --color-purple-400: #d8b4fe;
+  --color-purple-500: #c084fc;
+}
+
+html.theme-barbie body {
+  background: #0a0014;
+  color: #f3e8ff;
+}
+
+/* Neon — neon-sign artwork: deep violet night, electric blue, neon cyan,
+   hot magenta glow */
+html.theme-neonsign {
+  --color-slate-50: #f6f3fd;
+  --color-slate-100: #e9e4fa;
+  --color-slate-200: #d4cbf4;
+  --color-slate-300: #b6a5ea;
+  --color-slate-400: #8f74d6;
+  --color-slate-500: #6348b0;
+  --color-slate-600: #45308a;
+  --color-slate-700: #322060;
+  --color-slate-800: #241349;
+  --color-slate-900: #180c33;
+  --color-slate-950: #0e0620;
+
+  --color-indigo-100: #dbe6ff;
+  --color-indigo-300: #aec3ff;
+  --color-indigo-400: #7fa0ff;
+  --color-indigo-500: #4f7bff;
+  --color-indigo-600: #3b5ef0;
+  --color-indigo-700: #2f4ad0;
+  --color-indigo-900: #16255e;
+  --color-indigo-950: #0d1838;
+
+  --color-positive: #00e5ff;
+  --color-positive-100: #b8f6ff;
+  --color-positive-400: #00e5ff;
+  --color-positive-500: #00d0ea;
+  --color-positive-600: #00b0cc;
+  --color-positive-700: #008aa3;
+  --color-positive-900: #0a4d5c;
+  --color-positive-950: #052e37;
+
+  --color-negative: #ff3dc8;
+  --color-negative-100: #ffdff6;
+  --color-negative-200: #ffc2ee;
+  --color-negative-300: #ff94e0;
+  --color-negative-400: #ff5fd0;
+  --color-negative-500: #ff3dc8;
+  --color-negative-600: #e01fb0;
+  --color-negative-700: #b3158c;
+  --color-negative-900: #5c0a49;
+  --color-negative-950: #38052d;
+
+  --color-amber-100: #ffd9ef;
+  --color-amber-300: #ffb2e2;
+  --color-amber-400: #ff8ad4;
+  --color-amber-500: #ff6ec7;
+  --color-amber-600: #ee4fb0;
+
+  --color-emerald-100: #b8f7f1;
+  --color-emerald-200: #7defe4;
+  --color-emerald-300: #4de6d5;
+  --color-emerald-400: #2ce5d8;
+  --color-emerald-500: #17d4c4;
+  --color-emerald-600: #00b3a8;
+
+  --color-blue-100: #d0f7ff;
+  --color-blue-400: #33e8ff;
+  --color-blue-500: #00d5f0;
+  --color-blue-600: #00b8d8;
+
+  --color-rose-400: #ff6ec7;
+  --color-rose-600: #e02890;
+  --color-rose-900: #5c0f42;
+
+  --color-teal-100: #a5f3ec;
+  --color-orange-400: #ff9e6e;
+  --color-purple-400: #c4a5ff;
+  --color-purple-500: #a78bfa;
+}
+
+html.theme-neonsign body {
+  background: linear-gradient(180deg, #1d0c3e 0%, #120729 45%, #0a0318 78%, #05010e 100%) fixed;
+  color: #e9e4fa;
+}
+
+/* Sidebar gradient in the neon-banner's violet tone, falling toward the
+   deep bottom of the main gradient */
+html.theme-neonsign aside {
+  background: linear-gradient(180deg, #1a0740 0%, #100626 55%, #080213 100%);
+}
+
+/* Eire — tricolor: shamrock green on white, flag orange */
+html.theme-irish {
+  --color-slate-50: #0b1f14;
+  --color-slate-100: #152b1d;
+  --color-slate-200: #1f3a2c;
+  --color-slate-300: #2f5240;
+  --color-slate-400: #4a7059;
+  --color-slate-500: #6b8f79;
+  --color-slate-600: #a4b8ac;
+  --color-slate-700: #d3ded6;
+  --color-slate-800: #e6ede9;
+  --color-slate-900: #f4f8f5;
+  --color-slate-950: #ffffff;
+
+  --color-indigo-100: #ddf2e6;
+  --color-indigo-300: #86d4ac;
+  --color-indigo-400: #3cb97e;
+  --color-indigo-500: #17a05e;
+  --color-indigo-600: #12824e;
+  --color-indigo-700: #0d6b40;
+  --color-indigo-900: #14532d;
+  --color-indigo-950: #0b3520;
+
+  --color-positive: #10a35f;
+  --color-positive-100: #045c35;
+  --color-positive-400: #10a35f;
+  --color-positive-500: #0e9455;
+  --color-positive-600: #0b7a47;
+  --color-positive-700: #096138;
+  --color-positive-900: #d1f5e3;
+  --color-positive-950: #d1f5e3;
+
+  --color-negative: #e8590c;
+  --color-negative-100: #9a3412;
+  --color-negative-200: #c2410c;
+  --color-negative-300: #e8590c;
+  --color-negative-400: #e8590c;
+  --color-negative-500: #f76707;
+  --color-negative-600: #d9480f;
+  --color-negative-700: #b45309;
+  --color-negative-900: #ffedd5;
+  --color-negative-950: #ffedd5;
+
+  --color-amber-100: #9a3412;
+  --color-amber-300: #c2410c;
+  --color-amber-400: #ea580c;
+  --color-amber-500: #ff883e;
+  --color-amber-600: #f76707;
+
+  --color-emerald-50: #045c35;
+  --color-emerald-100: #065f46;
+  --color-emerald-200: #047857;
+  --color-emerald-300: #059669;
+  --color-emerald-400: #10a35f;
+  --color-emerald-500: #17a05e;
+  --color-emerald-600: #12824e;
+  --color-emerald-950: #d1f5e3;
+
+  --color-blue-100: #075985;
+  --color-blue-400: #0284c7;
+  --color-blue-500: #0ea5e9;
+  --color-blue-600: #0284c7;
+
+  --color-rose-400: #e8590c;
+  --color-rose-600: #d9480f;
+  --color-rose-900: #7c2d12;
+
+  --color-teal-100: #0f766e;
+  --color-orange-400: #ea580c;
+  --color-purple-400: #ffa04d;
+  --color-purple-500: #ff883e;
+  --color-purple-600: #f76707;
+  --color-purple-700: #e8590c;
+}
+
+html.theme-irish body {
+  background: #f6faf7;
+  color: #0b1f14;
+}
+
+html.theme-irish input[type="month"],
+html.theme-irish input[type="datetime-local"] {
+  color-scheme: light;
+}
+
+html.theme-irish input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  filter: invert(0);
+}
+
+/* Medieval — the desktop app's near-black blue-grey panels, signature
+   blue accent, buy-green / sell-red */
+html.theme-medieval {
+  --color-slate-50: #f5f6f8;
+  --color-slate-100: #e8eaef;
+  --color-slate-200: #d4d8e0;
+  --color-slate-300: #b4bac6;
+  --color-slate-400: #8a91a0;
+  --color-slate-500: #5c6572;
+  --color-slate-600: #3d434e;
+  --color-slate-700: #2c313a;
+  --color-slate-800: #1f232a;
+  --color-slate-900: #16181d;
+  --color-slate-950: #101216;
+
+  --color-indigo-100: #dbe9fd;
+  --color-indigo-300: #a8c9fa;
+  --color-indigo-400: #7fb2f8;
+  --color-indigo-500: #5b9cf6;
+  --color-indigo-600: #3f8bf3;
+  --color-indigo-700: #2f78e0;
+  --color-indigo-900: #1b3a6b;
+  --color-indigo-950: #122649;
+
+  --color-positive: #57c98f;
+  --color-positive-100: #d3f2e2;
+  --color-positive-400: #57c98f;
+  --color-positive-500: #4caf7d;
+  --color-positive-600: #3e9a6c;
+  --color-positive-700: #2f7d56;
+  --color-positive-900: #153e2b;
+  --color-positive-950: #0c2419;
+
+  --color-negative: #e05563;
+  --color-negative-100: #fbdfe1;
+  --color-negative-200: #f6c0c4;
+  --color-negative-300: #ee9aa0;
+  --color-negative-400: #e05563;
+  --color-negative-500: #d64550;
+  --color-negative-600: #c13345;
+  --color-negative-700: #a02839;
+  --color-negative-900: #571321;
+  --color-negative-950: #340b13;
+
+  --color-amber-100: #fbe8c8;
+  --color-amber-300: #f5c878;
+  --color-amber-400: #e8a33d;
+  --color-amber-500: #e8a33d;
+  --color-amber-600: #cf8a28;
+
+  --color-emerald-100: #d3f2e2;
+  --color-emerald-200: #a9e6c6;
+  --color-emerald-300: #7dd9a9;
+  --color-emerald-400: #57c98f;
+  --color-emerald-500: #4caf7d;
+  --color-emerald-600: #3e9a6c;
+
+  --color-blue-100: #dbe9fd;
+  --color-blue-400: #5b9cf6;
+  --color-blue-500: #4d9bf5;
+  --color-blue-600: #3f8bf3;
+
+  --color-rose-400: #e05563;
+  --color-rose-600: #c13345;
+  --color-rose-900: #571321;
+
+  --color-teal-100: #bfeef2;
+  --color-orange-400: #e8894d;
+  --color-purple-400: #8a9bd4;
+  --color-purple-500: #7a8fc4;
+}
+
+html.theme-medieval body {
+  background: #131519;
+  color: #d8dce4;
+}
+
+/* Cush — the CIELAB-designed palette: warm cream surfaces and soft
+   teal-grey text built for low eye strain over long sessions */
+html.theme-cush {
+  --color-slate-50: #002b36;
+  --color-slate-100: #073642;
+  --color-slate-200: #274f5a;
+  --color-slate-300: #3e616b;
+  --color-slate-400: #586e75;
+  --color-slate-500: #657b83;
+  --color-slate-600: #93a1a1;
+  --color-slate-700: #d3c9a8;
+  --color-slate-800: #e3dabd;
+  --color-slate-900: #eee8d5;
+  --color-slate-950: #fdf6e3;
+
+  --color-indigo-100: #135a84;
+  --color-indigo-300: #8abde4;
+  --color-indigo-400: #4fa0d9;
+  --color-indigo-500: #268bd2;
+  --color-indigo-600: #1f74b1;
+  --color-indigo-700: #1b6096;
+  --color-indigo-900: #bcdcf1;
+  --color-indigo-950: #d4e9f6;
+
+  --color-positive: #859900;
+  --color-positive-100: #5c7000;
+  --color-positive-400: #859900;
+  --color-positive-500: #859900;
+  --color-positive-600: #6b7d00;
+  --color-positive-700: #556500;
+  --color-positive-900: #e4e7c4;
+  --color-positive-950: #eef0d4;
+
+  --color-negative: #dc322f;
+  --color-negative-100: #a3271f;
+  --color-negative-200: #c22b28;
+  --color-negative-300: #dc322f;
+  --color-negative-400: #dc322f;
+  --color-negative-500: #dc322f;
+  --color-negative-600: #bf2b28;
+  --color-negative-700: #a3271f;
+  --color-negative-900: #f0d8d0;
+  --color-negative-950: #f6e4de;
+
+  --color-amber-100: #8a6800;
+  --color-amber-300: #b58900;
+  --color-amber-400: #b58900;
+
+  --color-emerald-50: #3f4e00;
+  --color-emerald-100: #4d5e00;
+  --color-emerald-200: #5c7000;
+  --color-emerald-300: #6b8000;
+  --color-emerald-400: #859900;
+  --color-emerald-950: #e4e7c4;
+
+  --color-blue-100: #1f74b1;
+  --color-blue-400: #268bd2;
+  --color-blue-500: #268bd2;
+  --color-blue-600: #1f74b1;
+
+  --color-orange-400: #cb4b16;
+  --color-purple-400: #6c71c4;
+  --color-purple-500: #6c71c4;
+  --color-rose-400: #d33682;
+  --color-rose-600: #b32d6f;
+  --color-rose-900: #f0d4e2;
+  --color-teal-100: #2aa198;
+}
+
+html.theme-cush body {
+  background: #fdf6e3;
+  color: #073642;
+}
+
+/* The Optimist — identical to dark, but every red/negative shade is a neutral
+   grey so losses never show red */
+html.theme-optimist {
+  --color-negative: #9aa3b0;
+  --color-negative-100: #e8eaed;
+  --color-negative-200: #d1d5db;
+  --color-negative-300: #b0b7c3;
+  --color-negative-400: #9aa3b0;
+  --color-negative-500: #7d8794;
+  --color-negative-600: #6b7280;
+  --color-negative-700: #4b5563;
+  --color-negative-900: #2f3540;
+  --color-negative-950: #1c2129;
+
+  --color-red-100: #e8eaed;
+  --color-red-200: #d1d5db;
+  --color-red-300: #b0b7c3;
+  --color-red-400: #9aa3b0;
+  --color-red-500: #7d8794;
+  --color-red-600: #6b7280;
+  --color-red-700: #4b5563;
+  --color-red-800: #3a4048;
+  --color-red-900: #2f3540;
+  --color-red-950: #1c2129;
+
+  --color-rose-400: #9aa3b0;
+  --color-rose-600: #6b7280;
+  --color-rose-900: #2f3540;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  background: #0a1019;
+  color: #e8edf6;
+}
+
+html.theme-castrol body {
+  background: #ffffff;
+  color: #0f172a;
+}
+
+input[type="checkbox"]:not(.sr-only) {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 1rem;
+  height: 1rem;
+  border: 1px solid #475569;
+  border-radius: 0.25rem;
+  background-color: transparent;
+  cursor: pointer;
+  transition: all 150ms ease-in-out;
+}
+
+input[type="checkbox"]:not(.sr-only):checked {
+  background-color: var(--color-indigo-500);
+  border-color: var(--color-indigo-500);
+  background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2.5-2.5a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3e%3c/svg%3e");
+  background-size: 100% 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+input[type="month"],
+input[type="datetime-local"] {
+  color-scheme: dark;
+}
+
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  cursor: pointer;
+  opacity: 0.85;
+}
+
+html.theme-castrol input[type="month"],
+html.theme-castrol input[type="datetime-local"],
+html.theme-cush input[type="month"],
+html.theme-cush input[type="datetime-local"] {
+  color-scheme: light;
+}
+
+@keyframes resend-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(248, 113, 113, 0);
+    text-shadow: 0 0 0 rgba(248, 113, 113, 0);
+  }
+  50% {
+    box-shadow: 0 0 10px 3px rgba(248, 113, 113, 0.55);
+    text-shadow: 0 0 8px rgba(248, 113, 113, 0.8);
+  }
+}
+
+.resend-failed-pulse {
+  animation: resend-glow 1.6s ease-in-out infinite;
+}
+
+/* Gradient border for account cards with a live TradersPost destination — the
+   padding-box layer keeps the card fill (adapts to theme via --color-slate-900)
+   while the border-box layer paints the gradient. */
+.account-card-live {
+  border: 2px solid transparent;
+  background:
+    linear-gradient(var(--color-slate-900), var(--color-slate-900)) padding-box,
+    linear-gradient(135deg, var(--color-indigo-500), #a855f7, var(--color-blue-500), var(--color-indigo-500)) border-box;
+  background-size: 100% 100%, 300% 300%;
+  animation: account-border-flow 8s linear infinite;
+}
+
+@keyframes account-border-flow {
+  to {
+    background-position: 0 0, 300% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .account-card-live {
+    animation: none;
+  }
+}
+
+html.theme-castrol input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+html.theme-cush input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  filter: invert(0);
+}
+
+
+/* LED dot-matrix clock face — tiny dots clipped to the glyphs. Sizing in em so
+   the dot grid scales with font-size; tuned to look like a station board.
+   Below 1024px and above 1550px the clock falls back to plain white digits. */
+@media (min-width: 1024px) and (max-width: 1550px) {
+  .led-matrix {
+    color: transparent;
+    background-image: radial-gradient(circle, #f8fafc 36%, transparent 46%);
+    background-size: 0.055em 0.055em;
+    -webkit-background-clip: text;
+    background-clip: text;
+  }
+}
+
+/* Faint repeating account-name watermark — an SVG tile (built per card in
+   Accounts.tsx) repeated behind the content. Literal grey stays subtle on
+   both themes. */
+.account-card-watermark {
+  position: relative;
+  overflow: hidden;
+}
+.account-card-watermark::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: var(--account-watermark, none);
+  background-repeat: repeat;
+  opacity: 0.1;
+  pointer-events: none;
+}
+
+/* Liquid Glass — iOS-style frosted surface: translucent gradient body,
+   specular top edge, soft inner shadow, backdrop blur. Adapts per theme. */
+.liquid-glass {
+  background: linear-gradient(
+    150deg,
+    rgba(255, 255, 255, 0.09),
+    rgba(255, 255, 255, 0.02) 40%,
+    rgba(148, 163, 184, 0.07)
+  ) !important;
+  backdrop-filter: blur(16px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  border-color: rgba(255, 255, 255, 0.16) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    inset 0 -1px 1px rgba(0, 0, 0, 0.15),
+    0 10px 30px rgba(2, 6, 23, 0.35) !important;
+}
+
+html.theme-castrol .liquid-glass {
+  background: linear-gradient(
+    150deg,
+    rgba(255, 255, 255, 0.8),
+    rgba(255, 255, 255, 0.45) 45%,
+    rgba(226, 232, 240, 0.6)
+  ) !important;
+  border-color: rgba(15, 23, 42, 0.08) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -1px 1px rgba(15, 23, 42, 0.05),
+    0 10px 30px rgba(15, 23, 42, 0.08) !important;
+}
+
+/* Live cards keep the animated gradient border — glass fills the padding-box
+   layer instead of replacing the whole background. */
+.account-card-live.liquid-glass {
+  background:
+    linear-gradient(150deg, rgb(15 23 42 / 0.48), rgb(15 23 42 / 0.47)) padding-box,
+    linear-gradient(135deg, var(--color-indigo-500), #a855f7, var(--color-blue-500), var(--color-indigo-500)) border-box !important;
+  background-size: 100% 100%, 300% 300%;
+  border-color: transparent !important;
+}
+
+html.theme-castrol .account-card-live.liquid-glass {
+  background:
+    linear-gradient(150deg, rgb(248 250 252 / 0.49), rgb(241 245 249 / 0.48)) padding-box,
+    linear-gradient(135deg, var(--color-indigo-500), #a855f7, var(--color-blue-500), var(--color-indigo-500)) border-box !important;
+}
+
+/* Chips/pills — same material at smaller scale: translucent fill, hairline
+   border, inner sheen, gentle lift. */
+html.theme-glass .rounded-full[class*="border"] {
+  background-color: rgb(255 255 255 / 0.45);
+  border-color: rgb(30 41 59 / 0.1);
+  backdrop-filter: blur(8px) saturate(1.3);
+  -webkit-backdrop-filter: blur(8px) saturate(1.3);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    0 1px 3px rgba(30, 41, 59, 0.07);
+}
+
+/* All slate borders flatten to the same pale hairline — slate-600 greys read
+   too heavy against the frost. Colored borders (accents/alerts) untouched. */
+html.theme-glass [class*="border-slate-"] {
+  border-color: rgb(30 41 59 / 0.12) !important;
+}
+html.theme-glass .divide-slate-700 > * + * {
+  border-color: rgb(30 41 59 / 0.08) !important;
+}
+
+/* Concave glass buttons — the surface dips inward: bright top sheen, soft
+   inner occlusion along the edges, gentle outer lift. Scoped to colored
+   (non-ghost) buttons so subtle buttons stay flat. */
+html.theme-glass button[class*="bg-gradient"] {
+  /* Sheen LAYERS over the Tailwind gradient — the color must survive. */
+  background-image:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.32),
+      rgba(255, 255, 255, 0.1) 45%,
+      rgba(255, 255, 255, 0.02) 60%,
+      rgba(0, 0, 0, 0.1)
+    ),
+    linear-gradient(var(--tw-gradient-stops));
+}
+html.theme-glass button[class*="bg-indigo"],
+html.theme-glass button[class*="bg-blue"],
+html.theme-glass button[class*="bg-positive"],
+html.theme-glass button[class*="bg-negative"] {
+  /* Solid fills: sheen alone — it overlays the element's background-color. */
+  background-image: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.32),
+    rgba(255, 255, 255, 0.1) 45%,
+    rgba(255, 255, 255, 0.02) 60%,
+    rgba(0, 0, 0, 0.1)
+  );
+}
+html.theme-glass button[class*="bg-gradient"],
+html.theme-glass button[class*="bg-indigo"],
+html.theme-glass button[class*="bg-blue"],
+html.theme-glass button[class*="bg-positive"],
+html.theme-glass button[class*="bg-negative"] {
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.4),
+    inset 0 -3px 6px rgba(0, 0, 0, 0.22),
+    inset 3px 0 6px rgba(0, 0, 0, 0.08),
+    inset -3px 0 6px rgba(0, 0, 0, 0.08),
+    0 3px 10px rgba(30, 41, 59, 0.15);
+  border-radius: 0.55rem;
+}
+
+html.theme-glass button[class*="bg-gradient"]:hover {
+  background-image:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.45),
+      rgba(255, 255, 255, 0.18) 50%,
+      rgba(0, 0, 0, 0.06)
+    ),
+    linear-gradient(var(--tw-gradient-stops));
+}
+html.theme-glass button[class*="bg-indigo"]:hover,
+html.theme-glass button[class*="bg-blue"]:hover,
+html.theme-glass button[class*="bg-positive"]:hover,
+html.theme-glass button[class*="bg-negative"]:hover {
+  background-image: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.45),
+    rgba(255, 255, 255, 0.18) 50%,
+    rgba(0, 0, 0, 0.06)
+  );
+}
+
+html.theme-glass button[class*="bg-gradient"]:active,
+html.theme-glass button[class*="bg-indigo"]:active,
+html.theme-glass button[class*="bg-blue"]:active,
+html.theme-glass button[class*="bg-positive"]:active,
+html.theme-glass button[class*="bg-negative"]:active {
+  box-shadow:
+    inset 0 2px 6px rgba(0, 0, 0, 0.28),
+    inset 3px 0 6px rgba(0, 0, 0, 0.1),
+    inset -3px 0 6px rgba(0, 0, 0, 0.1);
+}
+
+/* Bordered buttons/links become glass pills: a gradient sheen overlays
+   whatever fill the element already has (colored buttons keep their hue),
+   plus specular edge, blur, and ambient lift. */
+html.theme-glass button[class*="border"],
+html.theme-glass a[class*="border"] {
+  background-image: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.6),
+    rgba(255, 255, 255, 0.18) 45%,
+    rgba(255, 255, 255, 0.05) 60%,
+    rgba(30, 41, 59, 0.05)
+  );
+  backdrop-filter: blur(10px) saturate(1.3);
+  -webkit-backdrop-filter: blur(10px) saturate(1.3);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 2px 6px rgba(30, 41, 59, 0.08);
+}
+html.theme-glass button[class*="border"]:hover,
+html.theme-glass a[class*="border"]:hover {
+  background-image: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.75),
+    rgba(255, 255, 255, 0.3) 50%,
+    rgba(255, 255, 255, 0.12)
+  );
+}
+
+/* Sidebar surface is a from-/to- gradient (no bg-slate class) — frost it
+   directly so it matches the rest of the theme. */
+html.theme-glass aside {
+  backdrop-filter: blur(18px) saturate(1.5);
+  -webkit-backdrop-filter: blur(18px) saturate(1.5);
+}
+
+
+/* Pointer cursor on every clickable control — global affordance. */
+button:not(:disabled),
+[role="button"],
+select,
+summary,
+label,
+a[href] {
+  cursor: pointer;
+}
+
+/* ============================================================
+   Dark Glass — the glass material language on a dark palette.
+   Mounted as theme-glass (structure) + theme-glassdark (tokens +
+   dark-flavored overrides). These rules sit last so they win over
+   the light-glass values.
+   ============================================================ */
+html.theme-glassdark {
+  /* dark slate ramp — surfaces translucent, borders pale hairlines */
+  --color-slate-50: #f8fafc;
+  --color-slate-100: #f1f5f9;
+  --color-slate-200: #e2e8f0;
+  --color-slate-300: #cbd5e1;
+  --color-slate-400: #94a3b8;
+  --color-slate-500: #64748b;
+  --color-slate-600: #475569;
+  --color-slate-700: rgb(255 255 255 / 0.14);
+  --color-slate-800: rgb(30 41 59 / 0.5);
+  --color-slate-900: rgb(15 23 42 / 0.62);
+  --color-slate-950: rgb(2 6 23 / 0.75);
+
+  /* accents back to dark-theme values */
+  --color-indigo-100: #dfe9ff;
+  --color-indigo-300: #9db5fd;
+  --color-indigo-400: #7a97fb;
+  --color-indigo-500: #5272f2;
+  --color-indigo-600: #3f5de6;
+  --color-indigo-700: #3048cb;
+  --color-indigo-900: rgb(42 58 143 / 0.5);
+  --color-indigo-950: rgb(28 37 88 / 0.55);
+
+  --color-positive: #51e2b0;
+  --color-positive-100: #d1fae5;
+  --color-positive-400: #34d399;
+  --color-positive-900: rgb(6 78 59 / 0.5);
+  --color-positive-950: rgb(2 44 34 / 0.55);
+  --color-negative-100: #fee2e2;
+  --color-negative-200: #fecaca;
+  --color-negative-300: #fca5a5;
+  --color-negative-400: #f87171;
+  --color-negative-900: rgb(127 29 29 / 0.45);
+  --color-negative-950: rgb(69 10 10 / 0.5);
+
+  --color-amber-100: #fef3c7;
+  --color-amber-200: #fde68a;
+  --color-amber-300: #fcd34d;
+  --color-amber-400: #fbbf24;
+  --color-amber-600: #d97706;
+  --color-amber-700: #b45309;
+  --color-amber-900: rgb(120 53 15 / 0.45);
+  --color-amber-950: rgb(69 26 3 / 0.5);
+  --color-blue-100: #dbeafe;
+  --color-blue-400: #60a5fa;
+  --color-blue-900: rgb(30 58 138 / 0.45);
+  --color-red-300: #fca5a5;
+  --color-red-400: #f87171;
+  --color-red-900: rgb(127 29 29 / 0.45);
+  --color-rose-100: #ffe4e6;
+  --color-rose-300: #fda4af;
+  --color-rose-900: rgb(136 19 55 / 0.45);
+  --color-orange-100: #ffedd5;
+  --color-teal-900: rgb(19 78 74 / 0.5);
+  --color-green-400: #4ade80;
+  --color-redfolder-400: #f87171;
+  --color-emerald-50: #ecfdf5;
+  --color-emerald-100: #d1fae5;
+  --color-emerald-200: #a7f3d0;
+  --color-emerald-300: #6ee7b7;
+  --color-emerald-400: #34d399;
+  --color-emerald-900: rgb(6 78 59 / 0.5);
+  --color-emerald-950: rgb(2 44 34 / 0.55);
+  --color-orange-400: #fb923c;
+  --color-purple-400: #c084fc;
+  --color-purple-500: #a855f7;
+  --color-rose-400: #fb7185;
+  --color-teal-100: #ccfbf1;
+}
+
+html.theme-glassdark body {
+  background:
+    radial-gradient(1400px 700px at 20% -15%, rgba(76, 100, 160, 0.28), transparent 60%),
+    radial-gradient(1000px 600px at 85% -5%, rgba(100, 80, 160, 0.2), transparent 55%),
+    radial-gradient(1100px 800px at 50% 115%, rgba(40, 60, 100, 0.3), transparent 60%),
+    linear-gradient(170deg, #0b101c, #0e1420 45%, #080c14);
+  background-attachment: fixed;
+  color: #f1f5f9;
+}
+
+/* dark-flavored specular edge + deeper ambient shadow */
+html.theme-glassdark .rounded-xl,
+html.theme-glassdark .rounded-2xl,
+html.theme-glassdark .rounded-lg,
+html.theme-glassdark .rounded[class*="bg-"],
+html.theme-glassdark .rounded-md[class*="bg-"] {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.35),
+    0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+/* fields — translucent dark fill, pale hairline, top sheen */
+html.theme-glassdark input:not([type="checkbox"]):not([type="radio"]),
+html.theme-glassdark select,
+html.theme-glassdark textarea {
+  background-color: rgb(15 23 42 / 0.45) !important;
+  border-color: rgb(255 255 255 / 0.14) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 -1px 2px rgba(0, 0, 0, 0.25),
+    0 2px 6px rgba(0, 0, 0, 0.3) !important;
+}
+html.theme-glassdark input:not([type="checkbox"]):not([type="radio"]):focus,
+html.theme-glassdark select:focus,
+html.theme-glassdark textarea:focus {
+  background-color: rgb(15 23 42 / 0.6) !important;
+  border-color: rgb(122 151 251 / 0.5) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 0 0 3px rgb(122 151 251 / 0.2),
+    0 2px 8px rgba(0, 0, 0, 0.35) !important;
+}
+html.theme-glassdark input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+html.theme-glassdark input[type="month"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+}
+
+/* slate borders → pale hairlines on dark */
+html.theme-glassdark [class*="border-slate-"] {
+  border-color: rgb(255 255 255 / 0.12) !important;
+}
+html.theme-glassdark .divide-slate-700 > * + * {
+  border-color: rgb(255 255 255 / 0.08) !important;
+}
+
+/* chips — translucent dark pills */
+html.theme-glassdark .rounded-full[class*="border"] {
+  background-color: rgb(30 41 59 / 0.45);
+  border-color: rgb(255 255 255 / 0.12);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+/* Dark glass buttons — the light-glass sheen is too milky on dark fills;
+   drop it to a whisper of top highlight. */
+html.theme-glassdark button[class*="border"],
+html.theme-glassdark a[class*="border"] {
+  background-image: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.14),
+    rgba(255, 255, 255, 0.05) 45%,
+    rgba(255, 255, 255, 0.01) 60%,
+    rgba(0, 0, 0, 0.12)
+  );
+}
+html.theme-glassdark button[class*="border"]:hover,
+html.theme-glassdark a[class*="border"]:hover {
+  background-image: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.22),
+    rgba(255, 255, 255, 0.1) 50%,
+    rgba(255, 255, 255, 0.03)
+  );
+}
+
+/* Glass banner tone-matching — the artwork is a white card; blend it into
+   each glass palette instead of floating a bright tile. */
+html.theme-glass:not(.theme-glassdark) img[src*="glass-banner"] {
+  border-radius: 0.85rem;
+}
+
+html.theme-glassdark img[src*="glass-banner"] {
+  border-radius: 0.85rem;
+}
+
+
+/* Overscroll control — elastic/rubber-band scrolling reveals the html layer
+   behind body; pin it to each theme's base tone and damp the bounce.
+   Pointer devices only: on touch devices `none` suppresses pull-to-refresh. */
+html {
+  background: #0a1019;   /* default dark */
+}
+@media (hover: hover) and (pointer: fine) {
+  html {
+    overscroll-behavior: none;
+  }
+}
+html.theme-glass { background: #edf1f7; }
+html.theme-castrol { background: #ffffff; }
+html.theme-ultra { background: #05010c; }
+html.theme-barbie { background: #0a0014; }
+html.theme-neonsign { background: #05010e; }
+html.theme-irish { background: #f6faf7; }
+html.theme-medieval { background: #131519; }
+html.theme-cush { background: #fdf6e3; }
+html.theme-optimist { background: #0a1019; }
+html.theme-glassdark { background: #080c14; }   /* after theme-glass — dark mounts both */
+/* Castrol — racing-green primary actions + tighter radii platform-wide. */
+html.theme-castrol button.bg-indigo-600,
+html.theme-castrol a.bg-indigo-600 {
+  background-color: #00823b;
+}
+html.theme-castrol button.bg-indigo-600:hover,
+html.theme-castrol a.bg-indigo-600:hover {
+  background-color: #006b30;
+}
+html.theme-castrol button.bg-indigo-600:focus-visible,
+html.theme-castrol a.bg-indigo-600:focus-visible {
+  --tw-ring-color: #00a852;
+}
+html.theme-castrol .rounded { border-radius: 0.0625rem; }
+html.theme-castrol .rounded-md { border-radius: 0.09375rem; }
+html.theme-castrol .rounded-lg { border-radius: 0.125rem; }
+html.theme-castrol .rounded-xl { border-radius: 0.1875rem; }
+html.theme-castrol .rounded-2xl { border-radius: 0.25rem; }
+html.theme-castrol .rounded-3xl { border-radius: 0.375rem; }
+
+/* Castrol — green checkboxes */
+html.theme-castrol input[type="checkbox"] {
+  accent-color: #00823b;
+}
+html.theme-castrol input[type="checkbox"].text-indigo-500 {
+  color: #00823b;
+}
+html.theme-castrol input[type="checkbox"]:focus {
+  --tw-ring-color: #00a852;
+}
+
+/* Ultra (neon) — same squared radii as Castrol. */
+html.theme-ultra .rounded { border-radius: 0.0625rem; }
+html.theme-ultra .rounded-md { border-radius: 0.09375rem; }
+html.theme-ultra .rounded-lg { border-radius: 0.125rem; }
+html.theme-ultra .rounded-xl { border-radius: 0.1875rem; }
+html.theme-ultra .rounded-2xl { border-radius: 0.25rem; }
+html.theme-ultra .rounded-3xl { border-radius: 0.375rem; }
+
+html.theme-castrol input[type="checkbox"]:not(.sr-only):checked {
+  background-color: #00823b;
+  border-color: #00823b;
+}
+html.theme-castrol input[type="checkbox"]:not(.sr-only):hover:checked {
+  background-color: #006b30;
+  border-color: #006b30;
+}
+
+/* Sidebar frost — the aside gradient classes don't match the bg-slate-*
+   blur selector, so frosted it explicitly. */
+html.theme-glass [class*="from-slate-900"][class*="to-slate-950"],
+html.theme-glassdark [class*="from-slate-900"][class*="to-slate-950"] {
+  backdrop-filter: blur(18px) saturate(1.5);
+  -webkit-backdrop-filter: blur(18px) saturate(1.5);
+}
+
+
+/* Visual password mask without type="password" — Chrome's password manager
+   keyes on the input type; a text input with a bullet mask draws no autofill. */
+input.pw-mask {
+  -webkit-text-security: disc;
+  text-security: disc;
+}
+
+/* Subscription account chips — explicit light/dark styling: the glass themes
+   remap palette tokens translucently, which washes out a token-colored chip. */
+.sub-chip-selected {
+  border-color: var(--color-indigo-500);
+  background: var(--color-indigo-600);
+  color: #fff;
+  box-shadow: 0 0 0 1px rgba(129, 140, 248, 0.6), 0 2px 10px rgba(79, 70, 229, 0.45);
+}
+/* Light glass: theme-glass WITHOUT theme-glassdark */
+html.theme-glass:not(.theme-glassdark) .sub-chip-selected {
+  border-color: #1d4ed8;
+  background: #2563eb;
+  color: #fff;
+  box-shadow: 0 1px 4px rgba(29, 78, 216, 0.35), inset 0 1px 0 rgba(255,255,255,0.25);
+}
+html.theme-glass:not(.theme-glassdark) .sub-chip {
+  border-color: #cbd5e1;
+  background: rgba(255,255,255,0.7);
+  color: #334155;
+}
+/* Dark glass */
+html.theme-glassdark .sub-chip-selected {
+  border-color: #818cf8;
+  background: #4f46e5;
+  color: #fff;
+}
+html.theme-glassdark .sub-chip {
+  border-color: #475569;
+  background: #0f172a;
+  color: #cbd5e1;
+}
+
+.sub-chip-check { font-weight: 700; margin-right: -2px; }
+
+/* Nested trade rows inside an expanded closed-trades group — the rail + tinted
+   background make the parent/child relationship obvious. Colors follow the
+   theme tokens so light themes get a subtle wash instead of a dark block. */
+.trade-row-nested td {
+  background: color-mix(in srgb, var(--color-slate-950) 35%, transparent);
+}
+.trade-row-nested td:first-child {
+  border-left: 2px solid var(--color-indigo-500);
+  padding-left: 0.75rem;
+}
+
+/* The expanded child panel reads as part of the parent row: the parent's open
+   tint wraps the sub-table and an indigo rail runs down the left edge,
+   connecting the chevron to the nested rows. */
+.trade-row-nested-wrap-td {
+  background: color-mix(in srgb, var(--color-slate-700) 20%, transparent);
+  box-shadow: inset 3px 0 0 var(--group-accent, var(--color-indigo-500));
+  padding-bottom: 0.375rem;
+}
+/* Parent row carries the same rail for its full height when open. */
+.trade-group-open td:first-child {
+  box-shadow: inset 3px 0 0 var(--group-accent, var(--color-indigo-500));
+}
+.trade-row-nested-wrap-td .trade-row-nested td {
+  background: transparent;
+}
+.trade-row-nested-wrap-td .trade-row-nested td:first-child {
+  border-left: none;
+  padding-left: 0.75rem;
+}

@@ -1,0 +1,276 @@
+:root {
+  color: #e8edf7;
+  font-family: system-ui, sans-serif;
+}
+
+body {
+  background: #111827;
+  margin: 0;
+  min-width: 380px;
+}
+
+main {
+  background: linear-gradient(145deg, #172033, #111827 65%);
+  min-height: 100%;
+  padding: 20px;
+}
+
+.review-page {
+  margin: 0 auto;
+  max-width: 640px;
+}
+
+.review-body {
+  background: #fff;
+  color: #172033;
+}
+
+.review-body main {
+  background: #fff;
+  min-height: 0;
+  padding: 16px;
+}
+
+.review-body h1 {
+  font-size: 18px;
+  letter-spacing: normal;
+}
+
+.review-body section + section {
+  margin-top: 24px;
+}
+
+.review-section-note {
+  color: #657086;
+  font-size: 12px;
+  margin: 6px 0 0;
+}
+
+h1, h2 {
+  margin: 0;
+}
+
+h1 {
+  font-size: 24px;
+  letter-spacing: -0.4px;
+}
+
+h2 {
+  font-size: 14px;
+}
+
+form, label {
+  display: grid;
+  gap: 6px;
+}
+
+form {
+  margin: 16px 0;
+}
+
+input, select, button {
+  background: #fff;
+  border: 1px solid #9da8ba;
+  border-radius: 5px;
+  box-sizing: border-box;
+  color: #172033;
+  font: inherit;
+  padding: 8px;
+}
+
+button {
+  cursor: pointer;
+}
+
+.section-heading {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.eyebrow {
+  color: #91e6a2;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  margin: 0 0 5px;
+}
+
+.subtitle {
+  color: #b9c6dc;
+  line-height: 1.4;
+  margin: 8px 0 16px;
+}
+
+.primary-action {
+  background: #6ea8fe;
+  border: 0;
+  color: #061429;
+  font-weight: 800;
+  margin-bottom: 8px;
+  width: 100%;
+}
+
+#import-forex-factory {
+  margin-bottom: 12px;
+  width: 100%;
+}
+
+.draft {
+  background: #fff;
+  border: 1px solid #d8dce5;
+  border-radius: 6px;
+  margin-top: 8px;
+  padding: 10px;
+  position: relative;
+}
+
+.draft h2 {
+  padding-right: 120px;
+}
+
+.draft-age {
+  color: #3f4a60;
+  font-size: 12px;
+  font-weight: 800;
+  position: absolute;
+  right: 10px;
+  top: 12px;
+}
+
+.cancellation-reminder {
+  background: #fff8e1;
+  border-color: #e6b325;
+}
+
+.cancellation-reminder h2 {
+  color: #7a5200;
+}
+
+.draft-grid {
+  display: grid;
+  gap: 8px 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 12px 0;
+}
+
+.draft-grid div {
+  display: grid;
+  gap: 2px;
+}
+
+.draft-grid span {
+  color: #657086;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.draft-grid .value-row {
+  align-items: center;
+  display: flex;
+  gap: 4px;
+}
+
+.draft-grid .value-row button.copy-value {
+  align-items: center;
+  background: transparent;
+  color: #657086;
+  display: inline-flex;
+  margin: 0;
+  padding: 3px;
+}
+
+.draft-grid .value-row button.copy-value:hover {
+  color: #174ea6;
+}
+
+.draft-grid .value-row button.copy-value.copied {
+  color: #137333;
+}
+
+.draft-grid .value-row button.copy-value svg {
+  fill: currentColor;
+  height: 14px;
+  width: 14px;
+}
+
+.status {
+  border-radius: 999px;
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 8px;
+}
+
+.status.pending {
+  background: #e8f0fe;
+  color: #174ea6;
+}
+
+.status.rejected, .status.expired {
+  background: #fce8e6;
+  color: #b3261e;
+}
+
+.status.submitted {
+  background: #e6f4ea;
+  color: #137333;
+}
+
+.draft p {
+  margin: 4px 0;
+}
+
+.review-filter-form {
+  align-items: end;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 180px) minmax(0, 1fr);
+  margin: 14px 0 12px;
+}
+
+.review-filter-form input,
+.review-filter-form select {
+  width: 100%;
+}
+
+.empty-state {
+  border: 1px dashed #c3cad7;
+  border-radius: 6px;
+  color: #657086;
+  margin-top: 8px;
+  padding: 12px;
+}
+
+.contract-selector {
+  color: #3f4a60;
+  font-size: 12px;
+  font-weight: 700;
+  margin: 12px 0;
+}
+
+.contract-selector select {
+  display: block;
+  margin-top: 4px;
+  width: 100%;
+}
+
+.contract-selector span {
+  display: block;
+  font-size: 12px;
+  font-weight: 400;
+  margin-top: 4px;
+}
+
+.buy {
+  color: #137333;
+}
+
+.sell {
+  color: #b3261e;
+}
+
+.error {
+  color: #ffb4ab;
+}

@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="popup.css">
+    <title>Review Tradovate Orders</title>
+  </head>
+  <body class="review-body">
+    <main class="review-page">
+      <h1>Review Incoming Alerts</h1>
+      <p id="connection-status" role="status"></p>
+      <section>
+        <h2>Fresh orders and reminders</h2>
+        <div id="drafts" aria-live="polite"></div>
+      </section>
+      <section>
+        <div class="section-heading">
+          <div>
+            <h2>Completed orders and reminders</h2>
+            <p id="recent-drafts-summary" class="review-section-note">Showing the last 12 hours.</p>
+          </div>
+        </div>
+        <form id="recent-draft-filters" class="review-filter-form">
+          <label>Range
+            <select id="recent-draft-range" name="range">
+              <option value="all" selected>All ranges</option>
+            </select>
+          </label>
+          <label>Account
+            <select id="recent-draft-account" name="accountId">
+              <option value="all" selected>All accounts</option>
+            </select>
+          </label>
+          <label>Since
+            <select id="recent-draft-since" name="sinceHours">
+              <option value="12" selected>12 hours</option>
+              <option value="24">24 hours</option>
+              <option value="48">48 hours</option>
+              <option value="72">3 days</option>
+              <option value="168">1 week</option>
+            </select>
+          </label>
+          <label>Search
+            <input id="recent-draft-query" name="query" type="search" maxlength="256" placeholder="Range, ticker, action">
+          </label>
+        </form>
+        <div id="recent-drafts" aria-live="polite"></div>
+      </section>
+    </main>
+    <script type="module" src="review.js"></script>
+  </body>
+</html>

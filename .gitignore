@@ -1,0 +1,26 @@
+.env
+.env.*
+!*.env.example
+node_modules
+client/src/data/*.ts
+dist
+client/dist
+data/*.sqlite
+data/*.sqlite-wal
+data/*.sqlite-shm
+data/*.sqlite-*.bak
+data/*.sqlite-*.migrated
+data/*.sqlite-*.corrupt
+data/*.sqlite.pre-*
+data/*.sqlite.recovered*
+data/bridge.recovered.sql
+data/backups
+data/backups/**
+*.sqlite.bak
+*.log
+scripts/simulate-buy-sell.sh
+
+# Ignore SQLite files and local backup/export copies anywhere under data/
+data/**/*.sqlite*
+data/bridge-local-*/
+

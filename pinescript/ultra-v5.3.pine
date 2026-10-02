@@ -1,0 +1,1727 @@
+//@version=6
+
+// Ultra 5.3 can report simulated lifecycle events to the relay through a TradingView (From GPT, please test)
+// "Any alert() function call" alert. Configure that alert to use the proxy webhook;
+// lifecycle payloads are relay-only and explicit trade_closed events are authoritative.
+indicator("ULTRA 5.3", overlay = true, max_lines_count = 500, max_labels_count = 500, max_boxes_count = 500)
+
+//---------------------------------------------------------------------------------------------------------------------}
+//inputs
+//---------------------------------------------------------------------------------------------------------------------{
+
+//─── Schedule ───────────────────────────────────────────────────────────────────
+
+tz = "America/New_York"
+
+// Single source of truth for the script version — bump this as the
+// alert/lifecycle code iterates. Feeds payload "source" tags and bracket IDs.
+string ultraVersion = "5.3"
+string ultraSource = "ultra-v" + ultraVersion      // payload extras.source
+string ultraIdPrefix = ultraSource + "-"           // bracketId/tradeId prefix
+
+// Earliest possible heartbeat — proves the script is executing at all, before
+// any preset tables or inputs are touched. If this is the ONLY log you see,
+// the failure is in the declarations below.
+if barstate.isfirst
+    log.info("ULTRA 5.3 BOOT v=" + ultraVersion + " src=" + ultraSource + " t=" + str.format_time(time, "MM-dd HH:mm:ss", tz))
+
+selectedPreset = input.string("6-8 1x", title = "Range Preset", options = ["2026 CODE", "3-1-9 40/60", "3RILLER", "40 CODE", "44 CODE", "46 CODE", "49 CODE", "6-8 1x", "6-8 2:1", "6-8 78", "6-830 1x", "ALO VERA", "ASIA", "BREAKFAST", "BUFFET 2.0", "CC 963", "CRACKEN", "DAMN", "DIAMOND EBE", "DIAMOND GOLDEN OPPORTUNITY 1X", "DIAMOND XC 2X", "DYNAMITE V3", "EGGS", "FOUR HORSEMAN", "FULGORE", "FULL DAY 1830", "GOLDEN OPPORTUNITY 1/2X", "GOLDEN OPPORTUNITY 2X", "GOLDEN OPPORTUNITY LITE", "HAWKEYE 60-40", "HEAVEN", "LEBRON", "LIGHT BREAKFAST", "MATRIX 2", "MW 13 CODE NQ1!", "MW 22-8", "MW 68 NQ1!", "MW AE OIL FIBS CL1!", "MW BUFFET", "MW G68", "MW GHOST", "MW GOLD CODE", "MW M&M OSR", "MW NINA BUCK NQ", "MW NQ ORB", "MW R5", "MW RAT ORB", "MW Z CODE", "NINA DAILY", "RUPTURE", "SATOSHI", "Test Range", "THE SACRAMENT", "TIGER", "TOMAHAWK", "V3X", "V3X GOLD", "V4X", "WAGYU", "WISID C2"], group = "Schedule", tooltip = "Select the production-backed range preset by its exact bridge range name.")
+rangeSessionOverride = input.string("", title = "Range Session", group = "Preset Overrides", tooltip = "Optional override for the preset range session.\nLeave blank to keep the preset value.")
+riskAmountUsdOverride = input.float(-1.0, title = "Risk ($)", step = 1.0, group = "Preset Overrides", tooltip = "Optional override for preset risk.\nSet to -1 to keep the preset value.")
+
+maxBracketEntriesOverride = input.int(-1, title = "Entries / Range", minval = -1, group = "Preset Overrides", tooltip = "Optional override for preset entries per range.\nSet to -1 to keep the preset value.")
+tpStyleOverride = input.string("Preset", title = "TP Style", options = ["Preset", "Ticks", "½ range", "2/3 range", "1× range", "1.272 range", "1.414 range", "1.5× range", "2× range", "2.8× range", "3× range", "4× range", "5× range", "6× range", "7× range"], group = "Preset Overrides", tooltip = "Optional override for preset TP style.\nUse Preset to keep the preset value.")
+tpTicksOverrideInput = input.int(-1, title = "TP Ticks", minval = -1, group = "Preset Overrides", tooltip = "Optional override for preset TP ticks.\nSet to -1 to keep the preset value.")
+slStyleOverride = input.string("Preset", title = "SL Style", options = ["Preset", "Ticks", "¼ range", "½ range", "2/3 range", "0.728 range", "0.862 range", "1× range", "1.5× range", "Range + buffer"], group = "Preset Overrides", tooltip = "Optional override for preset SL style.\nUse Preset to keep the preset value.")
+slTicksOverrideInput = input.int(-1, title = "SL Ticks", minval = -1, group = "Preset Overrides", tooltip = "Optional override for preset SL ticks.\nSet to -1 to keep the preset value.")
+
+rangeNameOverride = input.string("", title = "Custom Range Name", group = "Preset Overrides", tooltip = "Optional override for the preset range name.\nLeave blank to keep the preset value.")
+
+string activeRangeName = str.length(rangeNameOverride) > 0 ? rangeNameOverride : selectedPreset
+float pointValue = na(syminfo.pointvalue) or syminfo.pointvalue <= 0 ? 1.0 : syminfo.pointvalue
+
+string presetInstrument = switch selectedPreset
+    "2026 CODE" => "MNQ1!"
+    "3-1-9 40/60" => "MNQ1!"
+    "3RILLER" => "MNQ1!"
+    "40 CODE" => "NQ1!"
+    "44 CODE" => "MNQ1!"
+    "46 CODE" => "MNQ1!"
+    "49 CODE" => "MNQ1!"
+    "6-8 1x" => "NQ1!"
+    "6-8 2:1" => "NQ1!"
+    "6-8 78" => "NQ1!"
+    "6-830 1x" => "NQ1!"
+    "ALO VERA" => "MNQ1!"
+    "ASIA" => "NQ1!"
+    "BREAKFAST" => "MNQ1!"
+    "BUFFET 2.0" => "MNQ1!"
+    "CC 963" => "MNQ1!"
+    "CRACKEN" => "MNQ1!"
+    "DAMN" => "MNQ1!"
+    "DIAMOND EBE" => "NQ1!"
+    "DIAMOND GOLDEN OPPORTUNITY 1X" => "MGC1!"
+    "DIAMOND XC 2X" => "NQ1!"
+    "DYNAMITE V3" => "MNQ1!"
+    "EGGS" => "MNQ1!"
+    "FOUR HORSEMAN" => "MNQ1!"
+    "FULGORE" => "MBT1!"
+    "FULL DAY 1830" => "MNQ1!"
+    "GOLDEN OPPORTUNITY 1/2X" => "MGC1!"
+    "GOLDEN OPPORTUNITY 2X" => "MGC1!"
+    "GOLDEN OPPORTUNITY LITE" => "MGC1!"
+    "HAWKEYE 60-40" => "MNQ1!"
+    "HEAVEN" => "MGC1!"
+    "LEBRON" => "MNQ1!"
+    "LIGHT BREAKFAST" => "MNQ1!"
+    "MATRIX 2" => "NQ1!"
+    "MW 13 CODE NQ1!" => "NQ1!"
+    "MW 22-8" => "NQ1!"
+    "MW 68 NQ1!" => "NQ1!"
+    "MW AE OIL FIBS CL1!" => "CL1!"
+    "MW BUFFET" => "NQ1!"
+    "MW G68" => "MGC1!"
+    "MW GHOST" => "NQ1!"
+    "MW GOLD CODE" => "MGC1!"
+    "MW M&M OSR" => "NQ1!"
+    "MW NINA BUCK NQ" => "NQ1!"
+    "MW NQ ORB" => "NQ1!"
+    "MW R5" => "NQ1!"
+    "MW RAT ORB" => "NQ1!"
+    "MW Z CODE" => "ZL1!"
+    "NINA DAILY" => "MNQ1!"
+    "RUPTURE" => "SIL1!"
+    "SATOSHI" => "MBT1!"
+    "Test Range" => "NQ1!"
+    "THE SACRAMENT" => "MGC1!"
+    "TIGER" => "MGC1!"
+    "TOMAHAWK" => "MNQ1!"
+    "V3X" => "MNQ1!"
+    "V3X GOLD" => "MGC1!"
+    "V4X" => "MNQ1!"
+    "WAGYU" => "MNQ1!"
+    "WISID C2" => "MNQ1!"
+    => ""
+
+string activeRangeSession = switch selectedPreset
+    "2026 CODE" => "1256-2023"
+    "3-1-9 40/60" => "0300-1900"
+    "3RILLER" => "0333-1833"
+    "40 CODE" => "0315-1804"
+    "44 CODE" => "2200-1804"
+    "46 CODE" => "1802-1801"
+    "49 CODE" => "1809-1804"
+    "6-8 1x" => "0600-0800"
+    "6-8 2:1" => "0600-0800"
+    "6-8 78" => "0600-0800"
+    "6-830 1x" => "0600-0830"
+    "ALO VERA" => "0600-1830"
+    "ASIA" => "1806-1809"
+    "BREAKFAST" => "0755-0930"
+    "BUFFET 2.0" => "0830-2000"
+    "CC 963" => "0900-1830"
+    "CRACKEN" => "2152-1804"
+    "DAMN" => "2128-1828"
+    "DIAMOND EBE" => "0830-1030"
+    "DIAMOND GOLDEN OPPORTUNITY 1X" => "1800-2230"
+    "DIAMOND XC 2X" => "0730-1000"
+    "DYNAMITE V3" => "2155-1916"
+    "EGGS" => "1100-1900"
+    "FOUR HORSEMAN" => "0444-2022"
+    "FULGORE" => "1804-1801"
+    "FULL DAY 1830" => "1831-1830"
+    "GOLDEN OPPORTUNITY 1/2X" => "1800-2230"
+    "GOLDEN OPPORTUNITY 2X" => "1800-2230"
+    "GOLDEN OPPORTUNITY LITE" => "1800-2230"
+    "HAWKEYE 60-40" => "1300-2000"
+    "HEAVEN" => "0933-1931"
+    "LEBRON" => "1230-2030"
+    "LIGHT BREAKFAST" => "0755-0930"
+    "MATRIX 2" => "0200-0800"
+    "MW 13 CODE NQ1!" => "0300-1000"
+    "MW 22-8" => "2200-0800"
+    "MW 68 NQ1!" => "0600-0800"
+    "MW AE OIL FIBS CL1!" => "0600-0830"
+    "MW BUFFET" => "2200-0830"
+    "MW G68" => "0600-0830"
+    "MW GHOST" => "1300-1400"
+    "MW GOLD CODE" => "2100-0000"
+    "MW M&M OSR" => "1100-1200"
+    "MW NINA BUCK NQ" => "1800-1845"
+    "MW NQ ORB" => "0930-1000"
+    "MW R5" => "0730-0935"
+    "MW RAT ORB" => "0945-0955"
+    "MW Z CODE" => "0330-0930"
+    "NINA DAILY" => "1900-1905"
+    "RUPTURE" => "0827-0830"
+    "SATOSHI" => "0100-0500"
+    "Test Range" => "1100-1200"
+    "THE SACRAMENT" => "1913-1911"
+    "TIGER" => "2200-0815"
+    "TOMAHAWK" => "0822-2028"
+    "V3X" => "0815-0825"
+    "V3X GOLD" => "1800-2230"
+    "V4X" => "0915-0925"
+    "WAGYU" => "0822-2028"
+    "WISID C2" => "1230-2102"
+    => ""
+
+// A range session must be HHMM-HHMM. A bare length check admits any 9-char
+// string — including a range name like "SACRAMENT" pasted into the session
+// override — which crashes time() at runtime with an invalid-session error.
+f_isValidSession(string _s) =>
+    bool _ok = false
+    if str.length(_s) == 9
+        if str.substring(_s, 4, 5) == "-"
+            float _h1 = str.tonumber(str.substring(_s, 0, 2))
+            float _m1 = str.tonumber(str.substring(_s, 2, 4))
+            float _h2 = str.tonumber(str.substring(_s, 5, 7))
+            float _m2 = str.tonumber(str.substring(_s, 7, 9))
+            _ok := not na(_h1) and _h1 >= 0 and _h1 <= 23 and not na(_m1) and _m1 >= 0 and _m1 <= 59 and not na(_h2) and _h2 >= 0 and _h2 <= 23 and not na(_m2) and _m2 >= 0 and _m2 <= 59
+    _ok
+
+f_hhmmToMinutes(string _hhmm) =>
+    str.tonumber(str.substring(_hhmm, 0, 2)) * 60 + str.tonumber(str.substring(_hhmm, 2, 4))
+
+bool activeRangeEnabled = f_isValidSession(activeRangeSession) and activeRangeSession != "0000-0000"
+
+float presetRiskAmountUsd = switch selectedPreset
+    "2026 CODE" => 80
+    "3-1-9 40/60" => 80
+    "3RILLER" => 80
+    "40 CODE" => 80
+    "44 CODE" => 80
+    "46 CODE" => 80
+    "49 CODE" => 80
+    "6-8 1x" => 80
+    "6-8 2:1" => 80
+    "6-8 78" => 80
+    "6-830 1x" => 80
+    "ALO VERA" => 60
+    "ASIA" => 80
+    "BREAKFAST" => 80
+    "BUFFET 2.0" => 80
+    "CC 963" => 80
+    "CRACKEN" => 60
+    "DAMN" => 60
+    "DIAMOND EBE" => 80
+    "DIAMOND GOLDEN OPPORTUNITY 1X" => 80
+    "DIAMOND XC 2X" => 80
+    "DYNAMITE V3" => 80
+    "EGGS" => 80
+    "FOUR HORSEMAN" => 90
+    "FULGORE" => 70
+    "FULL DAY 1830" => 80
+    "GOLDEN OPPORTUNITY 1/2X" => 80
+    "GOLDEN OPPORTUNITY 2X" => 80
+    "GOLDEN OPPORTUNITY LITE" => 80
+    "HAWKEYE 60-40" => 80
+    "HEAVEN" => 62
+    "LEBRON" => 80
+    "LIGHT BREAKFAST" => 80
+    "MATRIX 2" => 80
+    "MW 13 CODE NQ1!" => 80
+    "MW 22-8" => 80
+    "MW 68 NQ1!" => 80
+    "MW AE OIL FIBS CL1!" => 80
+    "MW BUFFET" => 80
+    "MW G68" => 80
+    "MW GHOST" => 80
+    "MW GOLD CODE" => 80
+    "MW M&M OSR" => 80
+    "MW NINA BUCK NQ" => 80
+    "MW NQ ORB" => 80
+    "MW R5" => 80
+    "MW RAT ORB" => 80
+    "MW Z CODE" => 80
+    "NINA DAILY" => 80
+    "RUPTURE" => 80
+    "SATOSHI" => 80
+    "Test Range" => 50
+    "THE SACRAMENT" => 62
+    "TIGER" => 90
+    "TOMAHAWK" => 80
+    "V3X" => 80
+    "V3X GOLD" => 80
+    "V4X" => 80
+    "WAGYU" => 90
+    "WISID C2" => 80
+    => 0.0
+
+string presetTpStyle = switch selectedPreset
+    "2026 CODE" => "Ticks"
+    "49 CODE" => "Ticks"
+    "46 CODE" => "Ticks"
+    "44 CODE" => "Ticks"
+    "40 CODE" => "Ticks"
+    "3RILLER" => "Ticks"
+    "3-1-9 40/60" => "Ticks"
+    "6-8 1x" => "1× range"
+    "6-8 78" => "Ticks"
+    "6-8 2:1" => "Ticks"
+    "6-830 1x" => "1× range"
+    "ALO VERA" => "Ticks"
+    "ASIA" => "1.5× range"
+    "BREAKFAST" => "1× range"
+    "CC 963" => "Ticks"
+    "BUFFET 2.0" => "Ticks"
+    "CRACKEN" => "Ticks"
+    "DAMN" => "Ticks"
+    "DIAMOND EBE" => "Ticks"
+    "DIAMOND GOLDEN OPPORTUNITY 1X" => "1× range"
+    "EGGS" => "Ticks"
+    "DYNAMITE V3" => "Ticks"
+    "DIAMOND XC 2X" => "Ticks"
+    "FOUR HORSEMAN" => "Ticks"
+    "FULGORE" => "Ticks"
+    "FULL DAY 1830" => "Ticks"
+    "GOLDEN OPPORTUNITY 1/2X" => "½ range"
+    "GOLDEN OPPORTUNITY 2X" => "2× range"
+    "GOLDEN OPPORTUNITY LITE" => "½ range"
+    "HAWKEYE 60-40" => "Ticks"
+    "HEAVEN" => "Ticks"
+    "LEBRON" => "Ticks"
+    "LIGHT BREAKFAST" => "½ range"
+    "MW 68 NQ1!" => "Ticks"
+    "MW 22-8" => "Ticks"
+    "MW 13 CODE NQ1!" => "Ticks"
+    "MATRIX 2" => "Ticks"
+    "MW AE OIL FIBS CL1!" => "1.414 range"
+    "NINA DAILY" => "Ticks"
+    "MW Z CODE" => "Ticks"
+    "MW RAT ORB" => "Ticks"
+    "MW R5" => "Ticks"
+    "MW NQ ORB" => "Ticks"
+    "MW NINA BUCK NQ" => "Ticks"
+    "MW M&M OSR" => "Ticks"
+    "MW GOLD CODE" => "Ticks"
+    "MW GHOST" => "Ticks"
+    "MW G68" => "Ticks"
+    "MW BUFFET" => "Ticks"
+    "RUPTURE" => "2.8× range"
+    "SATOSHI" => "Ticks"
+    "THE SACRAMENT" => "Ticks"
+    "V4X" => "Ticks"
+    "V3X GOLD" => "Ticks"
+    "V3X" => "Ticks"
+    "TOMAHAWK" => "Ticks"
+    "TIGER" => "Ticks"
+    "Test Range" => "Ticks"
+    "WAGYU" => "Ticks"
+    "WISID C2" => "Ticks"
+    => "Ticks"
+
+int presetTpTicksOverride = switch selectedPreset
+    "2026 CODE" => 40
+    "3-1-9 40/60" => 40
+    "3RILLER" => 100
+    "40 CODE" => 60
+    "44 CODE" => 60
+    "46 CODE" => 180
+    "49 CODE" => 90
+    "6-8 1x" => 0
+    "6-8 2:1" => 200
+    "6-8 78" => 80
+    "6-830 1x" => 0
+    "ALO VERA" => 40
+    "BREAKFAST" => 0
+    "ASIA" => 0
+    "BUFFET 2.0" => 40
+    "CC 963" => 100
+    "CRACKEN" => 40
+    "DAMN" => 220
+    "DIAMOND EBE" => 40
+    "DIAMOND GOLDEN OPPORTUNITY 1X" => 0
+    "DIAMOND XC 2X" => 200
+    "DYNAMITE V3" => 80
+    "EGGS" => 90
+    "FOUR HORSEMAN" => 120
+    "FULGORE" => 30
+    "FULL DAY 1830" => 60
+    "GOLDEN OPPORTUNITY LITE" => 0
+    "GOLDEN OPPORTUNITY 2X" => 0
+    "GOLDEN OPPORTUNITY 1/2X" => 0
+    "HAWKEYE 60-40" => 60
+    "HEAVEN" => 124
+    "LEBRON" => 40
+    "LIGHT BREAKFAST" => 0
+    "MATRIX 2" => 50
+    "MW 13 CODE NQ1!" => 80
+    "MW 22-8" => 100
+    "MW 68 NQ1!" => 100
+    "MW AE OIL FIBS CL1!" => 0
+    "MW BUFFET" => 100
+    "MW G68" => 30
+    "MW GHOST" => 100
+    "MW GOLD CODE" => 30
+    "MW M&M OSR" => 80
+    "MW NINA BUCK NQ" => 40
+    "MW NQ ORB" => 100
+    "MW R5" => 100
+    "MW RAT ORB" => 100
+    "MW Z CODE" => 15
+    "NINA DAILY" => 50
+    "RUPTURE" => 0
+    "SATOSHI" => 80
+    "Test Range" => 100
+    "THE SACRAMENT" => 60
+    "TIGER" => 15
+    "TOMAHAWK" => 220
+    "V3X" => 60
+    "V3X GOLD" => 90
+    "V4X" => 60
+    "WAGYU" => 150
+    "WISID C2" => 40
+    => 0
+
+string presetSlStyle = switch selectedPreset
+    "2026 CODE" => "Ticks"
+    "49 CODE" => "Ticks"
+    "46 CODE" => "Ticks"
+    "44 CODE" => "Ticks"
+    "40 CODE" => "Ticks"
+    "3RILLER" => "Ticks"
+    "3-1-9 40/60" => "Ticks"
+    "6-8 1x" => "1× range"
+    "6-8 2:1" => "Ticks"
+    "6-8 78" => "1× range"
+    "6-830 1x" => "1× range"
+    "ALO VERA" => "Ticks"
+    "ASIA" => "½ range"
+    "BREAKFAST" => "¼ range"
+    "CC 963" => "Ticks"
+    "BUFFET 2.0" => "Ticks"
+    "CRACKEN" => "Ticks"
+    "DAMN" => "Ticks"
+    "DIAMOND EBE" => "Ticks"
+    "DIAMOND GOLDEN OPPORTUNITY 1X" => "1× range"
+    "EGGS" => "Ticks"
+    "DYNAMITE V3" => "Ticks"
+    "DIAMOND XC 2X" => "Ticks"
+    "FOUR HORSEMAN" => "Ticks"
+    "FULGORE" => "Ticks"
+    "FULL DAY 1830" => "Ticks"
+    "GOLDEN OPPORTUNITY 1/2X" => "1× range"
+    "GOLDEN OPPORTUNITY 2X" => "1× range"
+    "GOLDEN OPPORTUNITY LITE" => "½ range"
+    "HAWKEYE 60-40" => "Ticks"
+    "HEAVEN" => "Ticks"
+    "LEBRON" => "Ticks"
+    "LIGHT BREAKFAST" => "¼ range"
+    "MW 68 NQ1!" => "Ticks"
+    "MW 22-8" => "Ticks"
+    "MW 13 CODE NQ1!" => "Ticks"
+    "MATRIX 2" => "Ticks"
+    "MW AE OIL FIBS CL1!" => "1× range"
+    "MW GOLD CODE" => "Ticks"
+    "MW GHOST" => "Ticks"
+    "MW G68" => "Ticks"
+    "MW BUFFET" => "Ticks"
+    "MW M&M OSR" => "1× range"
+    "NINA DAILY" => "Ticks"
+    "MW Z CODE" => "Ticks"
+    "MW RAT ORB" => "Ticks"
+    "MW R5" => "Ticks"
+    "MW NQ ORB" => "Ticks"
+    "MW NINA BUCK NQ" => "Ticks"
+    "SATOSHI" => "1× range"
+    "THE SACRAMENT" => "Ticks"
+    "TOMAHAWK" => "Ticks"
+    "TIGER" => "Ticks"
+    "Test Range" => "Ticks"
+    "V3X" => "1× range"
+    "V3X GOLD" => "1× range"
+    "V4X" => "1× range"
+    "WAGYU" => "Ticks"
+    "WISID C2" => "Ticks"
+    => "Ticks"
+
+int presetSlTicksOverride = switch selectedPreset
+    "2026 CODE" => 40
+    "3-1-9 40/60" => 60
+    "3RILLER" => 60
+    "40 CODE" => 60
+    "44 CODE" => 60
+    "46 CODE" => 60
+    "49 CODE" => 60
+    "6-8 1x" => 0
+    "6-8 2:1" => 100
+    "6-830 1x" => 0
+    "6-8 78" => 0
+    "ALO VERA" => 40
+    "BREAKFAST" => 0
+    "ASIA" => 0
+    "BUFFET 2.0" => 40
+    "CC 963" => 100
+    "CRACKEN" => 40
+    "DAMN" => 40
+    "DIAMOND EBE" => 40
+    "DIAMOND GOLDEN OPPORTUNITY 1X" => 0
+    "DIAMOND XC 2X" => 100
+    "DYNAMITE V3" => 40
+    "EGGS" => 60
+    "FOUR HORSEMAN" => 60
+    "FULGORE" => 30
+    "FULL DAY 1830" => 60
+    "GOLDEN OPPORTUNITY LITE" => 0
+    "GOLDEN OPPORTUNITY 2X" => 0
+    "GOLDEN OPPORTUNITY 1/2X" => 0
+    "HAWKEYE 60-40" => 40
+    "HEAVEN" => 30
+    "LEBRON" => 40
+    "LIGHT BREAKFAST" => 0
+    "MATRIX 2" => 40
+    "MW 13 CODE NQ1!" => 360
+    "MW 22-8" => 200
+    "MW 68 NQ1!" => 200
+    "MW AE OIL FIBS CL1!" => 0
+    "MW BUFFET" => 200
+    "MW G68" => 60
+    "MW GHOST" => 200
+    "MW GOLD CODE" => 60
+    "MW M&M OSR" => 0
+    "MW NINA BUCK NQ" => 80
+    "MW NQ ORB" => 200
+    "MW R5" => 200
+    "MW RAT ORB" => 200
+    "MW Z CODE" => 30
+    "NINA DAILY" => 40
+    "RUPTURE" => 0
+    "SATOSHI" => 0
+    "Test Range" => 100
+    "THE SACRAMENT" => 30
+    "TIGER" => 30
+    "TOMAHAWK" => 60
+    "V4X" => 0
+    "V3X GOLD" => 0
+    "V3X" => 0
+    "WAGYU" => 60
+    "WISID C2" => 40
+    => 0
+
+
+
+int presetEntriesPerRange = switch selectedPreset
+    "2026 CODE" => 1
+    "6-8 1x" => 1
+    "49 CODE" => 1
+    "46 CODE" => 1
+    "44 CODE" => 1
+    "40 CODE" => 1
+    "3RILLER" => 1
+    "3-1-9 40/60" => 1
+    "6-8 2:1" => 2
+    "6-830 1x" => 1
+    "6-8 78" => 1
+    "ALO VERA" => 2
+    "ASIA" => 2
+    "BREAKFAST" => 4
+    "CC 963" => 1
+    "BUFFET 2.0" => 1
+    "CRACKEN" => 1
+    "DAMN" => 2
+    "DIAMOND EBE" => 2
+    "DIAMOND GOLDEN OPPORTUNITY 1X" => 2
+    "EGGS" => 1
+    "DYNAMITE V3" => 1
+    "DIAMOND XC 2X" => 1
+    "FOUR HORSEMAN" => 1
+    "FULGORE" => 2
+    "FULL DAY 1830" => 1
+    "GOLDEN OPPORTUNITY 1/2X" => 2
+    "GOLDEN OPPORTUNITY 2X" => 2
+    "GOLDEN OPPORTUNITY LITE" => 1
+    "HAWKEYE 60-40" => 1
+    "HEAVEN" => 2
+    "LEBRON" => 1
+    "LIGHT BREAKFAST" => 4
+    "MATRIX 2" => 4
+    "MW 13 CODE NQ1!" => 1
+    "MW 22-8" => 1
+    "MW 68 NQ1!" => 1
+    "MW AE OIL FIBS CL1!" => 1
+    "MW BUFFET" => 1
+    "MW G68" => 1
+    "MW GHOST" => 1
+    "MW GOLD CODE" => 1
+    "MW M&M OSR" => 1
+    "MW NINA BUCK NQ" => 1
+    "MW NQ ORB" => 1
+    "MW R5" => 1
+    "MW RAT ORB" => 1
+    "MW Z CODE" => 1
+    "NINA DAILY" => 4
+    "RUPTURE" => 1
+    "SATOSHI" => 2
+    "Test Range" => 1
+    "THE SACRAMENT" => 2
+    "TIGER" => 1
+    "V4X" => 1
+    "V3X GOLD" => 1
+    "V3X" => 1
+    "TOMAHAWK" => 1
+    "WAGYU" => 1
+    "WISID C2" => 1
+    => 1
+
+int presetBeStopFlag = switch selectedPreset
+    "2026 CODE" => 0
+    "3-1-9 40/60" => 0
+    "3RILLER" => 0
+    "40 CODE" => 0
+    "44 CODE" => 0
+    "46 CODE" => 0
+    "49 CODE" => 0
+    "6-8 1x" => 0
+    "6-8 2:1" => 0
+    "6-8 78" => 0
+    "6-830 1x" => 0
+    "ALO VERA" => 1
+    "ASIA" => 0
+    "BREAKFAST" => 0
+    "BUFFET 2.0" => 0
+    "CC 963" => 0
+    "CRACKEN" => 0
+    "DAMN" => 1
+    "DIAMOND EBE" => 0
+    "DIAMOND GOLDEN OPPORTUNITY 1X" => 0
+    "DIAMOND XC 2X" => 0
+    "DYNAMITE V3" => 0
+    "EGGS" => 0
+    "FOUR HORSEMAN" => 1
+    "FULGORE" => 0
+    "FULL DAY 1830" => 0
+    "GOLDEN OPPORTUNITY 1/2X" => 0
+    "GOLDEN OPPORTUNITY 2X" => 0
+    "GOLDEN OPPORTUNITY LITE" => 0
+    "HAWKEYE 60-40" => 1
+    "HEAVEN" => 1
+    "LEBRON" => 0
+    "LIGHT BREAKFAST" => 0
+    "MATRIX 2" => 0
+    "MW 13 CODE NQ1!" => 0
+    "MW 22-8" => 0
+    "MW 68 NQ1!" => 0
+    "MW AE OIL FIBS CL1!" => 0
+    "MW BUFFET" => 0
+    "MW G68" => 0
+    "MW GHOST" => 0
+    "MW GOLD CODE" => 0
+    "MW M&M OSR" => 0
+    "MW NINA BUCK NQ" => 0
+    "MW NQ ORB" => 0
+    "MW R5" => 0
+    "MW RAT ORB" => 0
+    "MW Z CODE" => 0
+    "NINA DAILY" => 0
+    "RUPTURE" => 0
+    "SATOSHI" => 0
+    "Test Range" => 1
+    "THE SACRAMENT" => 1
+    "TIGER" => 0
+    "TOMAHAWK" => 0
+    "V3X" => 0
+    "V3X GOLD" => 0
+    "V4X" => 0
+    "WAGYU" => 1
+    "WISID C2" => 0
+    => 0
+
+int presetBeTriggerTicks = switch selectedPreset
+    "2026 CODE" => 0
+    "3-1-9 40/60" => 0
+    "3RILLER" => 0
+    "40 CODE" => 0
+    "44 CODE" => 0
+    "46 CODE" => 0
+    "49 CODE" => 0
+    "6-8 1x" => 0
+    "6-8 2:1" => 0
+    "6-8 78" => 0
+    "6-830 1x" => 0
+    "ALO VERA" => 20
+    "ASIA" => 0
+    "BREAKFAST" => 0
+    "BUFFET 2.0" => 0
+    "CC 963" => 0
+    "CRACKEN" => 0
+    "DAMN" => 125
+    "DIAMOND EBE" => 0
+    "DIAMOND GOLDEN OPPORTUNITY 1X" => 0
+    "DIAMOND XC 2X" => 0
+    "DYNAMITE V3" => 0
+    "EGGS" => 0
+    "FOUR HORSEMAN" => 60
+    "FULGORE" => 0
+    "FULL DAY 1830" => 0
+    "GOLDEN OPPORTUNITY 1/2X" => 0
+    "GOLDEN OPPORTUNITY 2X" => 0
+    "GOLDEN OPPORTUNITY LITE" => 0
+    "HAWKEYE 60-40" => 40
+    "HEAVEN" => 22
+    "LEBRON" => 0
+    "LIGHT BREAKFAST" => 0
+    "MATRIX 2" => 0
+    "MW 13 CODE NQ1!" => 0
+    "MW 22-8" => 0
+    "MW 68 NQ1!" => 0
+    "MW AE OIL FIBS CL1!" => 0
+    "MW BUFFET" => 0
+    "MW G68" => 0
+    "MW GHOST" => 0
+    "MW GOLD CODE" => 0
+    "MW M&M OSR" => 0
+    "MW NINA BUCK NQ" => 0
+    "MW NQ ORB" => 0
+    "MW R5" => 0
+    "MW RAT ORB" => 0
+    "MW Z CODE" => 0
+    "NINA DAILY" => 0
+    "RUPTURE" => 0
+    "SATOSHI" => 0
+    "Test Range" => 20
+    "THE SACRAMENT" => 31
+    "TIGER" => 0
+    "TOMAHAWK" => 0
+    "V3X" => 0
+    "V3X GOLD" => 0
+    "V4X" => 0
+    "WAGYU" => 60
+    "WISID C2" => 0
+    => 0
+
+int presetBeOffsetTicks = switch selectedPreset
+    "2026 CODE" => 0
+    "3-1-9 40/60" => 0
+    "3RILLER" => 0
+    "40 CODE" => 0
+    "44 CODE" => 0
+    "46 CODE" => 0
+    "49 CODE" => 0
+    "6-8 1x" => 0
+    "6-8 2:1" => 0
+    "6-8 78" => 0
+    "6-830 1x" => 0
+    "ALO VERA" => 0
+    "ASIA" => 0
+    "BREAKFAST" => 0
+    "BUFFET 2.0" => 0
+    "CC 963" => 0
+    "CRACKEN" => 0
+    "DAMN" => 0
+    "DIAMOND EBE" => 0
+    "DIAMOND GOLDEN OPPORTUNITY 1X" => 0
+    "DIAMOND XC 2X" => 0
+    "DYNAMITE V3" => 0
+    "EGGS" => 0
+    "FOUR HORSEMAN" => 0
+    "FULGORE" => 0
+    "FULL DAY 1830" => 0
+    "GOLDEN OPPORTUNITY 1/2X" => 0
+    "GOLDEN OPPORTUNITY 2X" => 0
+    "GOLDEN OPPORTUNITY LITE" => 0
+    "HAWKEYE 60-40" => 0
+    "HEAVEN" => 0
+    "LEBRON" => 0
+    "LIGHT BREAKFAST" => 0
+    "MATRIX 2" => 0
+    "MW 13 CODE NQ1!" => 0
+    "MW 22-8" => 0
+    "MW 68 NQ1!" => 0
+    "MW AE OIL FIBS CL1!" => 0
+    "MW BUFFET" => 0
+    "MW G68" => 0
+    "MW GHOST" => 0
+    "MW GOLD CODE" => 0
+    "MW M&M OSR" => 0
+    "MW NINA BUCK NQ" => 0
+    "MW NQ ORB" => 0
+    "MW R5" => 0
+    "MW RAT ORB" => 0
+    "MW Z CODE" => 0
+    "NINA DAILY" => 0
+    "RUPTURE" => 0
+    "SATOSHI" => 0
+    "Test Range" => 3
+    "THE SACRAMENT" => 0
+    "TIGER" => 0
+    "TOMAHAWK" => 0
+    "V3X" => 0
+    "V3X GOLD" => 0
+    "V4X" => 0
+    "WAGYU" => 0
+    "WISID C2" => 0
+    => 0
+
+bool presetUseBeStopEnabled = presetBeStopFlag > 0
+
+
+//─── Alert Configuration ───────────────────────────────────────────────────────
+// Controls that affect when and how alerts fire
+riskAmountUsd = riskAmountUsdOverride >= 0 ? riskAmountUsdOverride : presetRiskAmountUsd
+string beStopOverrideInput = input.string("Preset", title = "BE Stop", options = ["Preset", "On", "Off"], group = "Break-Even Stop", tooltip = "On/Off forces the break-even stop; Preset uses the preset default.")
+int beTriggerTicksOverrideInput = input.int(-1, title = "BE Trigger (override: -1 = use preset, 0+ = ticks)", minval = -1, group = "Break-Even Stop", tooltip = "Set to -1 to use the preset default, or a positive number of ticks the trade must move in your favor before the BE stop is applied.")
+int beOffsetTicksOverrideInput = input.int(-1, title = "BE Offset (override: -1 = use preset, -100+ = ticks)", minval = -100, group = "Break-Even Stop", tooltip = "Set to -1 to use the preset default, 0 to move stop to exact entry, positive for profit, negative for below/above entry.")
+
+bool useBeStop = beStopOverrideInput == "Preset" ? presetUseBeStopEnabled : beStopOverrideInput == "On"
+int beTriggerTicks = beTriggerTicksOverrideInput >= 0 ? beTriggerTicksOverrideInput : presetBeTriggerTicks
+int beOffsetTicks = beOffsetTicksOverrideInput != -1 ? beOffsetTicksOverrideInput : presetBeOffsetTicks
+bool beStopOverridden = beStopOverrideInput != "Preset"
+bool beTriggerOverridden = beTriggerTicksOverrideInput >= 0
+bool beOffsetOverridden = beOffsetTicksOverrideInput != -1
+
+//─── Range Bracket Orders ──────────────────────────────────────────────────────
+bracketEntryOffsetTicks = input.int(1, title = "Entry Offset (ticks)", step = 1, group = "Range Bracket Orders", tooltip = "Signed offset from each range edge. Positive values move entries outside the range beyond ORH/ORL. Negative values move entries inside the range for earlier fills. Ultra sends a stop order when the entry is beyond the current price, otherwise a limit order.")
+maxBracketEntriesPerRange = maxBracketEntriesOverride >= 0 ? maxBracketEntriesOverride : presetEntriesPerRange
+oneFillPerSidePerRange = input.bool(false, title = "One Fill Per Side Per Range", group = "Range Bracket Orders", tooltip = "When enabled, each range can fill at most one long bracket and one short bracket. Same-side re-arms are blocked once that side has already filled.")
+rearmSameSideStopAfterSl = input.bool(true, title = "Rearm Same-Side Stop After SL", group = "Range Bracket Orders", tooltip = "After a bracket trade reaches its stop-loss, sends a new pending stop-order alert at the same range edge with the current TP and SL settings.")
+rearmSameSideStopAfterTp = input.bool(false, title = "Rearm Same-Side Stop After TP", group = "Range Bracket Orders", tooltip = "After a bracket trade reaches its final take-profit, waits for price to return through that range edge, then sends a new same-side pending stop-order alert. This avoids immediately re-entering while price remains beyond the edge.")
+rearmSameSideStopAfterBe = input.bool(true, title = "Rearm Same-Side After BE Stop", group = "Range Bracket Orders", tooltip = "After a breakeven stop-out, waits for price to trade back inside the range on a later bar, then re-arms the same-side entry. The range-return wait prevents churn: a BE exit happens at/near the entry price, so an instant rearm would re-fill on the next bar.")
+suppressOppositeAfterTp = input.bool(true, title = "Suppress Opposite Side After TP", group = "Range Bracket Orders", tooltip = "When a bracket trade reaches take-profit, marks the opposite side inactive in the strategy model. Configure the Bridge destination to perform actual pending-order cancellation.")
+slCooldownBars = input.int(0, title = "SL Cooldown (bars)", minval = 0, group = "Range Bracket Orders", tooltip = "After a same-side stop-loss, block new entries on that side for N bars. 0 disables the cooldown.")
+
+//─── Alert Reporting ───────────────────────────────────────────────────────────
+// Lifecycle reporting is always on so bracket and trade lifecycle events are always emitted.
+bool enablePineAlertLogs = true
+bool sendLifecycleAlerts = true
+
+//─── Diagnostics ───────────────────────────────────────────────────────────────
+debugVerbose = input.bool(true, title = "Verbose Debug Logging", group = "Diagnostics", tooltip = "Logs every out-of-session bar, in-session heartbeats, and full alert payloads to Pine Logs. Turn off for normal use.")
+
+//─── Strategy Settings ─────────────────────────────────────────────────────────
+tpStyle = tpStyleOverride != "Preset" ? tpStyleOverride : presetTpStyle
+tpTicksOverride = tpTicksOverrideInput >= 0 ? tpTicksOverrideInput : presetTpTicksOverride
+slStyle = slStyleOverride != "Preset" ? slStyleOverride : presetSlStyle
+slTicksOverride = slTicksOverrideInput >= 0 ? slTicksOverrideInput : presetSlTicksOverride
+crSesh = str.length(rangeSessionOverride) > 0 ? rangeSessionOverride : activeRangeSession
+activeRangeEnabled := f_isValidSession(crSesh) and crSesh != "0000-0000"
+
+//─── Startup diagnostics ───────────────────────────────────────────────────────
+// One-time config dump so Pine Logs show exactly what the preset resolved to —
+// catches wrong symbol/timeframe, stale override fields, and default fallthrough.
+if barstate.isfirst
+    log.info("ULTRA 5.3 CONFIG range=" + activeRangeName + " chart=" + syminfo.ticker + " type=" + syminfo.type + " mintick=" + str.tostring(syminfo.mintick) + " pointvalue=" + str.tostring(pointValue) + " tf=" + timeframe.period + " tz=" + tz + " presetInst=" + presetInstrument)
+    log.info("ULTRA 5.3 CONFIG sesh=" + crSesh + " enabled=" + str.tostring(activeRangeEnabled) + " risk=$" + str.tostring(riskAmountUsd) + " entries=" + str.tostring(maxBracketEntriesPerRange) + " tp=" + tpStyle + "/" + str.tostring(tpTicksOverride) + " sl=" + slStyle + "/" + str.tostring(slTicksOverride))
+    log.info("ULTRA 5.3 CONFIG be=" + str.tostring(useBeStop) + " beTrig=" + str.tostring(beTriggerTicks) + " beOff=" + str.tostring(beOffsetTicks) + " oneFillPerSide=" + str.tostring(oneFillPerSidePerRange) + " entryOffset=" + str.tostring(bracketEntryOffsetTicks))
+    if f_isValidSession(crSesh)
+        float _sMin = f_hhmmToMinutes(str.substring(crSesh, 0, 4))
+        float _eMin = f_hhmmToMinutes(str.substring(crSesh, 5, 9))
+        float _rangeMin = (_eMin - _sMin + 1440) % 1440
+        float _tradeMin = (1440 - _rangeMin) % 1440
+        log.info("ULTRA 5.3 CONFIG window range=" + str.tostring(_rangeMin, "#") + "m trading=" + str.tostring(_tradeMin, "#") + "m — brackets arm/fill only during the out-of-session window")
+        float _tfMin = timeframe.in_seconds(timeframe.period) / 60
+        if _tradeMin > 0 and _tradeMin < _tfMin
+            log.warning("ULTRA 5.3 CONFIG trading window (" + str.tostring(_tradeMin, "#") + "m) is shorter than the chart timeframe (" + str.tostring(_tfMin, "#") + "m) — the out-of-session gap may never open on this chart")
+    if not f_isValidSession(crSesh)
+        log.error("ULTRA 5.3 INVALID SESSION '" + crSesh + "' — expected HHMM-HHMM; range disabled")
+    if riskAmountUsd <= 0
+        log.warning("ULTRA 5.3 risk=$" + str.tostring(riskAmountUsd) + " — brackets arm at minimum quantity")
+    if maxBracketEntriesPerRange <= 0
+        log.warning("ULTRA 5.3 entries/range=" + str.tostring(maxBracketEntriesPerRange) + " — no brackets will arm")
+
+//─── Display ───────────────────────────────────────────────────────────────────
+// Visual and cosmetic controls
+showPresetInfo = input.bool(true, title = "Show Settings Info", group = "Display", tooltip = "Displays a panel on the chart showing the active configuration.")
+useLightTableTheme = input.bool(false, title = "Use Light Table Theme", group = "Display", tooltip = "Uses a light blue and gray palette for the settings table. Disable for the dark blue and gray palette.")
+sigTog = input.bool(true, title = "Show Signals", group = "Display")
+showEntryIcons = input.bool(true, title = "Show Entry Icons", group = "Display", tooltip = "Plots a non-repainting icon below/above the bar where a long/short entry alert fires.")
+sigSize = "huge"
+upSigColor = #089981
+downSigColor = #f23645
+
+//─── Style ─────────────────────────────────────────────────────────────────────
+color orColor = #9932cc
+color orFillColor = color.new(color.gray,90)
+string txtSize = "small"
+
+invis = color.rgb(0,0,0,100)
+
+//---------------------------------------------------------------------------------------------------------------------}
+//Error
+//---------------------------------------------------------------------------------------------------------------------{
+if timeframe.in_seconds(timeframe.period) >= timeframe.in_seconds("D")
+    runtime.error("Timeframe is too High! Please Reduce Timeframe to be Less-Than 1 Day.")
+
+//---------------------------------------------------------------------------------------------------------------------}
+//Functions
+//---------------------------------------------------------------------------------------------------------------------{
+// True when the bar's range actually contains the level — price traded at it.
+// A bar entirely beyond the level does not qualify (e.g., price crossed while
+// the order was not yet armed: cooldown, deferred rearm, or a range return).
+barSpansLevel(float _level) =>
+    not na(_level) and low <= _level and high >= _level
+
+//─── Alert helpers (ported from 4.8.3 — payload structure unchanged) ────────────
+isMiniProxyRoot() =>
+    syminfo.root == "NQ" or syminfo.root == "ES" or syminfo.root == "YM" or syminfo.root == "GC" or syminfo.root == "BT"
+
+quantityStep() =>
+    syminfo.type == "futures" ? (isMiniProxyRoot() ? 0.1 : 1.0) : 0.01
+
+quantityUnitSize() =>
+    1.0 / quantityStep()
+
+roundSizedQuantity(float _quantity) =>
+    float _step = quantityStep()
+    float _unitSize = quantityUnitSize()
+    float _rounded = math.round(_quantity * _unitSize) / _unitSize
+    math.max(_step, _rounded)
+
+alertPriceIncrement() =>
+    syminfo.type == "futures" and (syminfo.root == "MGC" or syminfo.root == "GC") ? 0.1 : 0.25
+
+roundAlertPrice(float _price) =>
+    math.round(_price / alertPriceIncrement()) * alertPriceIncrement()
+
+lifecycleEscape(string _value) =>
+    string _escaped = str.replace_all(_value, "\\", "\\\\")
+    _escaped := str.replace_all(_escaped, "\"", "\\\"")
+    str.replace_all(_escaped, "\n", "\\n")
+    // NOTE: \\r is not a recognized escape in Pine and "\\r" would be interpreted as the literal letter r,
+    // which corrupted every r in tradeId/eventId strings into a carriage return. We do not escape CRs here
+    // because Pine strings built from code do not contain literal CRs.
+
+alertTimeMs() =>
+    na(time_close) ? time : time_close
+
+rangeBracketAlertJson(string _action, float _quantity, float _entry, float _strategyStopPrice, string _id, string _side, string _exitFields, string _beStopFields, string _leg) =>
+    float _roundedEntry = roundAlertPrice(_entry)
+    float _roundedStrategyStop = roundAlertPrice(_strategyStopPrice)
+    bool _isStop = _action == "buy" ? _roundedEntry > close : _roundedEntry < close
+    string _orderFields = _isStop ? ',"orderType":"stop","stopPrice":' + str.tostring(_roundedEntry, format.mintick) : ',"orderType":"limit","limitPrice":' + str.tostring(_roundedEntry, format.mintick)
+    string _strategyStopMode = "intrabar"
+    '{"ticker":"' + syminfo.ticker + '","action":"' + _action + '","quantity":' + str.tostring(_quantity) + ',"quantityType":"fixed_quantity","price":' + str.tostring(_roundedEntry, format.mintick) + ',"signalPrice":' + str.tostring(_roundedEntry, format.mintick) + _orderFields + ',"bracketId":"' + _id + '","bracketSide":"' + _side + '","time":"' + str.tostring(alertTimeMs()) + '","interval":"' + timeframe.period + '"' + _exitFields + _beStopFields + ',"extras":{"source":"' + ultraSource + '","strategyStopPrice":' + str.tostring(_roundedStrategyStop, format.mintick) + ',"strategyStopMode":"' + _strategyStopMode + '","orderRole":"range_bracket","orderLeg":"' + _leg + '","rangeName":"' + lifecycleEscape(activeRangeName) + '"}}'
+
+tradersPostRangeBracketExitFields(bool _isBuy, float _entry, float _tpDistance, float _slDistance, float _tpPercent, float _slPercent) =>
+    string _takeProfit = ',"takeProfit":{"percent":' + str.tostring(_tpPercent) + '}'
+    string _stopLoss = ',"stopLoss":{"type":"stop","percent":' + str.tostring(_slPercent) + '}'
+    _takeProfit + _stopLoss
+
+lifecycleSide(int _side) =>
+    _side == 1 ? "long" : "short"
+
+lifecycleNumber(float _value) =>
+    float _rounded = math.round(_value * 100.0) / 100.0
+    str.tostring(_rounded == 0 ? 0.0 : _rounded, "#.##")
+
+lifecycleQuantity(float _quantity) =>
+    str.tostring(_quantity, "#.######")
+
+lifecycleTime() =>
+    // Always use the bar close time for lifecycle timestamps.
+    // Using timenow in realtime made every trade_closed payload different on each tick,
+    // bypassing the per-bar alertFiredThisBar dedupe and causing duplicate/crashing alerts.
+    int _barTime = na(time_close) ? time : time_close
+    str.format_time(_barTime, "yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC")
+
+lifecycleBracketTradeId(string _bracketId, int _side, int _armIndex) =>
+    _bracketId + "-lifecycle-" + lifecycleSide(_side) + "-" + str.tostring(_armIndex)
+
+lifecycleEventId(string _tradeId, string _eventType, int _leg) =>
+    _tradeId + "-" + _eventType + "-leg-" + str.tostring(_leg)
+
+lifecycleEventJson(string _eventType, string _eventId, string _tradeId, int _side, string _action, float _quantity, float _entryPrice, float _exitPrice, float _realizedTicks, float _realizedDollars, string _outcome, bool _isClosed, string _exitReason) =>
+    string _entryField = na(_entryPrice) ? "" : ',"entryPrice":' + str.tostring(_entryPrice, format.mintick)
+    string _exitField = na(_exitPrice) ? "" : ',"exitPrice":' + str.tostring(_exitPrice, format.mintick)
+    string _closeFields = _isClosed ? ',"closedAt":"' + lifecycleTime() + '","realizedTicks":' + lifecycleNumber(_realizedTicks) + ',"realizedDollars":' + lifecycleNumber(_realizedDollars) + ',"outcome":"' + _outcome + '"' : ""
+    string _exitReasonField = _isClosed ? ',"exitReason":"' + _exitReason + '"' : ""
+    '{"eventType":"' + _eventType + '","eventId":"' + lifecycleEscape(_eventId) + '","tradeId":"' + lifecycleEscape(_tradeId) + '","ticker":"' + lifecycleEscape(syminfo.ticker) + '","side":"' + lifecycleSide(_side) + '","action":"' + _action + '","quantity":' + lifecycleQuantity(_quantity) + _entryField + _exitField + _closeFields + ',"extras":{"source":"' + ultraSource + '","rangeName":"' + lifecycleEscape(activeRangeName) + '"' + _exitReasonField + '}}'
+
+lifecycleEntryJson(string _eventType, string _tradeId, int _side, float _quantity, float _entryPrice, string _action) =>
+    lifecycleEventJson(_eventType, lifecycleEventId(_tradeId, _eventType, 0), _tradeId, _side, _action, _quantity, _entryPrice, na, na, na, "", false, "")
+
+// Emits an explicit entry_cancelled alert for an opposite bracket arm that Pine is retiring.
+// _reason is an optional extras.cancelReason tag for the bridge (e.g. "opposite_suppressed_after_tp").
+lifecycleEntryCancelledJson(string _tradeId, int _side, float _quantity, string _reason) =>
+    string _eventId = lifecycleEventId(_tradeId, "entry_cancelled", 0)
+    string _reasonField = str.length(_reason) > 0 ? ',"cancelReason":"' + lifecycleEscape(_reason) + '"' : ""
+    '{"eventType":"entry_cancelled","eventId":"' + lifecycleEscape(_eventId) + '","tradeId":"' + lifecycleEscape(_tradeId) + '","ticker":"' + lifecycleEscape(syminfo.ticker) + '","side":"' + lifecycleSide(_side) + '","action":"cancel","quantity":' + lifecycleQuantity(_quantity) + ',"extras":{"source":"' + ultraSource + '","rangeName":"' + lifecycleEscape(activeRangeName) + '"' + _reasonField + '}}'
+
+lifecycleTradeClosedJson(string _tradeId, int _side, int _leg, float _quantity, float _entryPrice, float _exitPrice, string _exitReason) =>
+    float _signedMove = (_exitPrice - _entryPrice) * (_side == 1 ? 1.0 : -1.0)
+    float _realizedTicks = _signedMove / syminfo.mintick
+    float _realizedDollars = _signedMove * pointValue * _quantity
+    string _outcome = _realizedTicks > 0 ? "win" : _realizedTicks < 0 ? "loss" : "breakeven"
+    lifecycleEventJson("trade_closed", lifecycleEventId(_tradeId, "trade_closed", _leg), _tradeId, _side, "exit", _quantity, _entryPrice, _exitPrice, _realizedTicks, _realizedDollars, _outcome, true, _exitReason)
+
+logAlertFiring(string _alertType, string _condition) =>
+    if enablePineAlertLogs
+        log.info("ULTRA 5.3 FIRE side=" + _alertType + " reason=" + _condition + " bar=" + str.tostring(bar_index))
+
+logAlertBlocked(string _alertType, string _reason) =>
+    if enablePineAlertLogs
+        log.info("ULTRA 5.3 BLOCK side=" + _alertType + " reason=" + _reason + " bar=" + str.tostring(bar_index))
+
+targetStyleMultiplier(string _style) =>
+    _style == "½ range" ? 0.5 :
+     _style == "2/3 range" ? 2.0 / 3.0 :
+     _style == "1× range" ? 1.0 :
+     _style == "1.272 range" ? 0.272 :
+     _style == "1.414 range" ? 0.414 :
+     _style == "1.5× range" ? 1.5 :
+     _style == "2× range" ? 2.0 :
+     _style == "2.8× range" ? 2.8 :
+     _style == "3× range" ? 3.0 :
+     _style == "4× range" ? 4.0 :
+     _style == "5× range" ? 5.2 :
+     _style == "6× range" ? 6.0 :
+     _style == "7× range" ? 7.0 :
+     1.0
+
+stopStyleMultiplier(string _style) =>
+    _style == "¼ range" ? 0.25 :
+     _style == "½ range" ? 0.5 :
+     _style == "2/3 range" ? 2.0 / 3.0 :
+     _style == "0.728 range" ? 0.728 :
+     _style == "0.862 range" ? 0.862 :
+     _style == "1× range" ? 0.95 :
+     _style == "1.5× range" ? 1.5 :
+     1.0
+
+stopStyleDistance(string _style, int _ticks, float _rangeDistance, float _mintick) =>
+    _style == "Ticks" ? _ticks * _mintick :
+     _rangeDistance * stopStyleMultiplier(_style) + (_style == "Range + buffer" ? _rangeDistance * 0.272 : 0.0)
+
+tpDistance(bool _isBuy, string _style, int _ticks, float _rangeDistance, float _rangeHigh, float _rangeLow, float _entryPrice, float _mintick) =>
+    _style == "Ticks" ? _ticks * _mintick :
+     _isBuy ? (_rangeHigh + _rangeDistance * targetStyleMultiplier(_style) - _entryPrice) :
+      (_entryPrice - (_rangeLow - _rangeDistance * targetStyleMultiplier(_style)))
+
+type target
+    line ln
+    label lab
+
+int rangeLabelOffsetBars = 2
+
+var bool or_sesh = false
+varip int longRearmAfterBar = na
+varip int shortRearmAfterBar = na
+varip int longCooldownAfterBar = na
+varip int shortCooldownAfterBar = na
+
+var float orh = na
+var float orl = na
+float orm = math.avg(orh, orl)
+
+var box or_bx = na
+var target h_ln = target.new(na, na)
+var target l_ln = target.new(na, na)
+var line m_ln = na
+var target long_tp_tg = target.new(na, na)
+var target long_sl_tg = target.new(na, na)
+var target short_tp_tg = target.new(na, na)
+var target short_sl_tg = target.new(na, na)
+var float long_tp = na
+var float long_sl = na
+var float short_tp = na
+var float short_sl = na
+var float longEntry = na
+var float shortEntry = na
+// Lifecycle state is varip so it is NOT rolled back between ticks on the
+// realtime bar — fills, exits, and rearms sequence genuinely tick-by-tick.
+// On historical bars varip behaves exactly like var.
+int ORDER_INACTIVE = 0
+int ORDER_ARMED = 1
+int ORDER_ACTIVE = 2
+int ORDER_AWAITING_REARM = 3
+f_stateName(int _s) =>
+    _s == ORDER_ARMED ? "armed" : _s == ORDER_ACTIVE ? "active" : _s == ORDER_AWAITING_REARM ? "awaiting_rearm" : "inactive"
+varip int entriesThisRange = 0
+varip int longOrderState = ORDER_INACTIVE
+varip int shortOrderState = ORDER_INACTIVE
+varip int outSeshBars = 0
+varip int lastLongStateLogged = ORDER_INACTIVE
+varip int lastShortStateLogged = ORDER_INACTIVE
+varip bool longFilledThisRange = false
+varip bool shortFilledThisRange = false
+varip int longEntryBar = na
+varip int shortEntryBar = na
+varip bool longBeActive = false
+varip bool shortBeActive = false
+varip float longBeSl = na
+varip float shortBeSl = na
+var array<label> signalLabels = array.new_label()
+varip int executionSeq = 0
+varip int longEntryExecutionSeq = na
+varip int shortEntryExecutionSeq = na
+varip float longEntryBarHigh = na
+varip float longEntryBarLow = na
+varip float shortEntryBarHigh = na
+varip float shortEntryBarLow = na
+varip int signalEventsBar = na
+varip array<float> longEntrySignals = array.new<float>(0)
+varip array<float> shortEntrySignals = array.new<float>(0)
+varip array<float> longTpSignals = array.new<float>(0)
+varip array<float> shortTpSignals = array.new<float>(0)
+varip array<float> longSlSignals = array.new<float>(0)
+varip array<float> shortSlSignals = array.new<float>(0)
+varip array<float> longBeSignals = array.new<float>(0)
+varip array<float> shortBeSignals = array.new<float>(0)
+
+//─── Bracket order alert state (4.8.3 port) ────────────────────────────────────
+// varip so order identity/state survives realtime-bar recalculation.
+var int currentRangeId = 0
+var int rangeStartTime = na
+varip int alertFiredBar = -1
+varip array<string> alertFiredThisBar = array.new<string>(0)
+varip array<string> alertQueue = array.new<string>(0)
+varip int bracketPlacedBar = na
+varip string bracketId = ""
+varip int bracketRangeId = na
+varip int bracketPlacementAlertBar = na
+varip float bracketLongEntryPrice = na
+varip float bracketShortEntryPrice = na
+varip float bracketLongTpDistance = na
+varip float bracketShortTpDistance = na
+varip float bracketLongSlDistance = na
+varip float bracketShortSlDistance = na
+varip float bracketLongQuantity = na
+varip float bracketShortQuantity = na
+varip string bracketLongArmId = ""
+varip string bracketShortArmId = ""
+varip string bracketLongLifecycleTradeId = ""
+varip string bracketShortLifecycleTradeId = ""
+varip int bracketLongLifecycleArmIndex = 0
+varip int bracketShortLifecycleArmIndex = 0
+
+fireAlert(string _payload) =>
+    if not na(_payload) and not array.includes(alertFiredThisBar, _payload)
+        array.push(alertFiredThisBar, _payload)
+        array.push(alertQueue, _payload)
+
+executionSeq += 1
+float _mintick = na(syminfo.mintick) or syminfo.mintick <= 0 ? 0.01 : syminfo.mintick
+float effectiveLow = math.min(low, close)
+float effectiveHigh = math.max(high, close)
+
+if na(signalEventsBar) or signalEventsBar != bar_index
+    array.clear(longEntrySignals)
+    array.clear(shortEntrySignals)
+    array.clear(longTpSignals)
+    array.clear(shortTpSignals)
+    array.clear(longSlSignals)
+    array.clear(shortSlSignals)
+    array.clear(longBeSignals)
+    array.clear(shortBeSignals)
+    signalEventsBar := bar_index
+
+// Reset per-bar alert dedupe before any fireAlert calls
+if bar_index != alertFiredBar
+    array.clear(alertFiredThisBar)
+    alertFiredBar := bar_index
+
+// Manual session membership — replaces time() so the session string never
+// reaches a call that can throw at runtime. A bar is in-session when its
+// minutes (in tz) fall inside [sMin, eMin); sessions wrapping past midnight
+// are handled by the or-branch.
+float _sessStartMin = f_isValidSession(crSesh) ? f_hhmmToMinutes(str.substring(crSesh, 0, 4)) : -1
+float _sessEndMin = f_isValidSession(crSesh) ? f_hhmmToMinutes(str.substring(crSesh, 5, 9)) : -1
+int _barMin = hour(time, tz) * 60 + minute(time, tz)
+bool _inRangeSesh = _sessStartMin >= 0 and (_sessStartMin <= _sessEndMin ? (_barMin >= _sessStartMin and _barMin < _sessEndMin) : (_barMin >= _sessStartMin or _barMin < _sessEndMin))
+if debugVerbose and (barstate.isfirst or _inRangeSesh != _inRangeSesh[1])
+    log.info("ULTRA 5.3 PRE-SESH " + str.tostring(bar_index) + " crSesh=" + crSesh + " barMin=" + str.tostring(_barMin) + " s/e=" + str.tostring(_sessStartMin, "#") + "/" + str.tostring(_sessEndMin, "#") + " in=" + str.tostring(_inRangeSesh) + " enabled=" + str.tostring(activeRangeEnabled))
+or_sesh := activeRangeEnabled and _inRangeSesh
+or_start = or_sesh and not or_sesh[1]
+or_end = or_sesh[1] and not or_sesh
+
+// Count chart bars that fall outside the range session — the trading window
+// expressed in bars. Reported at the next range start; 0 means the gap never
+// opened on this timeframe (window shorter than one bar).
+if activeRangeEnabled and not or_sesh
+    outSeshBars += 1
+
+// Background wash for the active preset range session.
+bgcolor(or_sesh ? color.new(orColor, 90) : na, title = "Active Preset Range", editable = true)
+
+// On the first bar of the range session, seed the opening range from that bar.
+if or_start
+    orh := effectiveHigh
+    orl := effectiveLow
+    orm := math.avg(orh, orl)
+    currentRangeId += 1
+    rangeStartTime := time
+    log.info("ULTRA 5.3 RANGE START id=" + str.tostring(currentRangeId) + " range=" + activeRangeName + " t=" + str.format_time(time, "MM-dd HH:mm", tz))
+    log.info("ULTRA 5.3 RANGE START wipe long=" + f_stateName(longOrderState) + " short=" + f_stateName(shortOrderState) + " entries=" + str.tostring(entriesThisRange) + " gapBars=" + str.tostring(outSeshBars))
+    outSeshBars := 0
+    longRearmAfterBar := na
+    shortRearmAfterBar := na
+    longCooldownAfterBar := na
+    shortCooldownAfterBar := na
+    longEntry := na
+    shortEntry := na
+    entriesThisRange := 0
+    longOrderState := ORDER_INACTIVE
+    shortOrderState := ORDER_INACTIVE
+    longFilledThisRange := false
+    shortFilledThisRange := false
+    longBeActive := false
+    shortBeActive := false
+    longBeSl := na
+    shortBeSl := na
+    longEntryBar := na
+    shortEntryBar := na
+    // Remove previous range drawings and signals so only the current range is visible.
+    if not na(or_bx)
+        or_bx.delete()
+    if not na(h_ln.ln)
+        h_ln.ln.delete()
+    if not na(h_ln.lab)
+        h_ln.lab.delete()
+    if not na(l_ln.ln)
+        l_ln.ln.delete()
+    if not na(l_ln.lab)
+        l_ln.lab.delete()
+    if not na(m_ln)
+        m_ln.delete()
+    if not na(long_tp_tg.ln)
+        long_tp_tg.ln.delete()
+    if not na(long_tp_tg.lab)
+        long_tp_tg.lab.delete()
+    if not na(long_sl_tg.ln)
+        long_sl_tg.ln.delete()
+    if not na(long_sl_tg.lab)
+        long_sl_tg.lab.delete()
+    if not na(short_tp_tg.ln)
+        short_tp_tg.ln.delete()
+    if not na(short_tp_tg.lab)
+        short_tp_tg.lab.delete()
+    if not na(short_sl_tg.ln)
+        short_sl_tg.ln.delete()
+    if not na(short_sl_tg.lab)
+        short_sl_tg.lab.delete()
+    for lab in signalLabels
+        lab.delete()
+    array.clear(signalLabels)
+    or_bx := box.new(bar_index, orh, bar_index, orl, border_color = orColor, bgcolor = orFillColor, border_width = 2)
+    h_ln := target.new(line.new(bar_index, orh, bar_index, orh, color = orColor), na)
+    l_ln := target.new(line.new(bar_index, orl, bar_index, orl, color = orColor), na)
+    m_ln := line.new(bar_index, orm, bar_index, orm, style = line.style_dashed, color = orColor)
+
+// Expand the range if price breaks the current bounds, and update the box/lines.
+if or_sesh
+    orh := math.max(orh, effectiveHigh)
+    orl := math.min(orl, effectiveLow)
+    orm := math.avg(orh, orl)
+    if not na(or_bx)
+        or_bx.set_top(orh)
+        or_bx.set_bottom(orl)
+        or_bx.set_right(bar_index)
+        or_bx.set_border_color(orColor)
+    if not na(h_ln.ln)
+        h_ln.ln.set_xy1(h_ln.ln.get_x1(), orh)
+        h_ln.ln.set_xy2(bar_index, orh)
+    if not na(l_ln.ln)
+        l_ln.ln.set_xy1(l_ln.ln.get_x1(), orl)
+        l_ln.ln.set_xy2(bar_index, orl)
+    if not na(m_ln)
+        m_ln.set_xy1(m_ln.get_x1(), orm)
+        m_ln.set_xy2(bar_index, orm)
+
+// When the range session ends, pin the right edge of the box to the last range bar.
+if not or_sesh and not na(or_bx)
+    or_bx.set_right(bar_index)
+
+// A session end with no accumulated range means the range never formed on this
+// chart (e.g. history starts mid-session). Log it — it was previously silent.
+if or_end and (na(orh) or na(orl))
+    log.warning("ULTRA 5.3 RANGE END skipped — orh/orl is na (range did not form this session)")
+
+// When the range forms, compute and draw the long/short TP and SL target levels.
+if or_end and not na(orh) and not na(orl)
+    log.info("ULTRA 5.3 RANGE END id=" + str.tostring(currentRangeId) + " orh=" + str.tostring(orh, format.mintick) + " orl=" + str.tostring(orl, format.mintick))
+    float _rangeDistance = orh - orl
+    long_tp := orh + tpDistance(true, tpStyle, tpTicksOverride, _rangeDistance, orh, orl, orh, _mintick)
+    long_sl := orh - stopStyleDistance(slStyle, slTicksOverride, _rangeDistance, _mintick)
+    short_tp := orl - tpDistance(false, tpStyle, tpTicksOverride, _rangeDistance, orh, orl, orl, _mintick)
+    short_sl := orl + stopStyleDistance(slStyle, slTicksOverride, _rangeDistance, _mintick)
+    longEntry := orh + bracketEntryOffsetTicks * _mintick
+    shortEntry := orl - bracketEntryOffsetTicks * _mintick
+    log.info("ULTRA 5.3 LEVELS longEntry=" + str.tostring(longEntry, format.mintick) + " lTP=" + str.tostring(long_tp, format.mintick) + " lSL=" + str.tostring(long_sl, format.mintick) + " | shortEntry=" + str.tostring(shortEntry, format.mintick) + " sTP=" + str.tostring(short_tp, format.mintick) + " sSL=" + str.tostring(short_sl, format.mintick))
+    if not na(or_bx)
+        or_bx.set_border_color(color.new(orColor, 100))
+    long_tp_tg := target.new(line.new(bar_index, long_tp, bar_index, long_tp, color = color.new(#089981, 0), style = line.style_dotted), label.new(bar_index + rangeLabelOffsetBars, long_tp, text = "L TP", tooltip = str.tostring(long_tp, format.mintick), style = label.style_label_left, color = invis, textcolor = color.new(#089981, 0), size = txtSize))
+    long_sl_tg := target.new(line.new(bar_index, long_sl, bar_index, long_sl, color = color.new(#f23645, 0), style = line.style_dotted), label.new(bar_index + rangeLabelOffsetBars, long_sl, text = "L SL", tooltip = str.tostring(long_sl, format.mintick), style = label.style_label_left, color = invis, textcolor = color.new(#f23645, 0), size = txtSize))
+    short_tp_tg := target.new(line.new(bar_index, short_tp, bar_index, short_tp, color = color.new(#089981, 0), style = line.style_dotted), label.new(bar_index + rangeLabelOffsetBars, short_tp, text = "S TP", tooltip = str.tostring(short_tp, format.mintick), style = label.style_label_left, color = invis, textcolor = color.new(#089981, 0), size = txtSize))
+    short_sl_tg := target.new(line.new(bar_index, short_sl, bar_index, short_sl, color = color.new(#f23645, 0), style = line.style_dotted), label.new(bar_index + rangeLabelOffsetBars, short_sl, text = "S SL", tooltip = str.tostring(short_sl, format.mintick), style = label.style_label_left, color = invis, textcolor = color.new(#f23645, 0), size = txtSize))
+
+    //─── Place bracket orders on both sides of the formed range (4.8.3 port) ────
+    // Distances derive from the already-computed TP/SL levels — no SL/TP logic change.
+    // Gate: or_end is true on every tick of the boundary bar — run placement once
+    // so arm indexes don't inflate and payloads stay identical across ticks.
+    bool _bracketPlacementSignal = na(bracketPlacementAlertBar) or bracketPlacementAlertBar != bar_index
+    if _bracketPlacementSignal
+        bracketPlacementAlertBar := bar_index
+        bracketPlacedBar := bar_index
+        bracketId := ultraIdPrefix + syminfo.ticker + "-" + str.tostring(rangeStartTime) + "-" + str.tostring(currentRangeId)
+        bracketRangeId := currentRangeId
+        bracketLongEntryPrice := longEntry
+        bracketShortEntryPrice := shortEntry
+        bracketLongTpDistance := long_tp - longEntry
+        bracketShortTpDistance := shortEntry - short_tp
+        bracketLongSlDistance := longEntry - long_sl
+        bracketShortSlDistance := short_sl - shortEntry
+        float _longRiskPerUnit = bracketLongSlDistance * pointValue
+        float _shortRiskPerUnit = bracketShortSlDistance * pointValue
+        bracketLongQuantity := _longRiskPerUnit > 0 ? roundSizedQuantity(riskAmountUsd / _longRiskPerUnit) : quantityStep()
+        bracketShortQuantity := _shortRiskPerUnit > 0 ? roundSizedQuantity(riskAmountUsd / _shortRiskPerUnit) : quantityStep()
+        int _entryCapacity = oneFillPerSidePerRange ? math.min(maxBracketEntriesPerRange, 2) : maxBracketEntriesPerRange
+        bool _longArmAllowed = _entryCapacity > 0 and bracketLongQuantity > 0
+        bool _shortArmAllowed = _entryCapacity > 0 and bracketShortQuantity > 0
+        log.info("ULTRA 5.3 ARM qtyL=" + str.tostring(bracketLongQuantity, "#.##") + " qtyS=" + str.tostring(bracketShortQuantity, "#.##") + " riskL=" + str.tostring(_longRiskPerUnit, "#.##") + " riskS=" + str.tostring(_shortRiskPerUnit, "#.##") + " cap=" + str.tostring(_entryCapacity))
+        string _beStopField = ""
+        if _longArmAllowed
+            bracketLongLifecycleArmIndex += 1
+            bracketLongArmId := bracketId + "-long-arm-" + str.tostring(bracketLongLifecycleArmIndex)
+            bracketLongLifecycleTradeId := lifecycleBracketTradeId(bracketLongArmId, 1, 0)
+            longOrderState := ORDER_ARMED
+            float _longTpPercent = longEntry != 0 ? math.abs(long_tp - longEntry) / math.abs(longEntry) * 100.0 : 0.0
+            float _longSlPercent = longEntry != 0 ? math.abs(longEntry - long_sl) / math.abs(longEntry) * 100.0 : 0.0
+            string _bracketBuyJson = rangeBracketAlertJson("buy", bracketLongQuantity, longEntry, long_sl, bracketLongArmId, "long", tradersPostRangeBracketExitFields(true, longEntry, bracketLongTpDistance, bracketLongSlDistance, _longTpPercent, _longSlPercent), _beStopField, "single")
+            logAlertFiring("bracket_buy", "range_end/single qty=" + str.tostring(bracketLongQuantity, "#.##"))
+            fireAlert(_bracketBuyJson)
+            if sendLifecycleAlerts
+                fireAlert(lifecycleEntryJson("entry_armed", bracketLongLifecycleTradeId, 1, bracketLongQuantity, longEntry, "buy"))
+        else
+            longOrderState := ORDER_INACTIVE
+            logAlertBlocked("bracket_buy", "not_armed qty=" + str.tostring(bracketLongQuantity, "#.##") + " cap=" + str.tostring(_entryCapacity))
+        if _shortArmAllowed
+            bracketShortLifecycleArmIndex += 1
+            bracketShortArmId := bracketId + "-short-arm-" + str.tostring(bracketShortLifecycleArmIndex)
+            bracketShortLifecycleTradeId := lifecycleBracketTradeId(bracketShortArmId, -1, 0)
+            shortOrderState := ORDER_ARMED
+            float _shortTpPercent = shortEntry != 0 ? math.abs(shortEntry - short_tp) / math.abs(shortEntry) * 100.0 : 0.0
+            float _shortSlPercent = shortEntry != 0 ? math.abs(short_sl - shortEntry) / math.abs(shortEntry) * 100.0 : 0.0
+            string _bracketSellJson = rangeBracketAlertJson("sell", bracketShortQuantity, shortEntry, short_sl, bracketShortArmId, "short", tradersPostRangeBracketExitFields(false, shortEntry, bracketShortTpDistance, bracketShortSlDistance, _shortTpPercent, _shortSlPercent), _beStopField, "single")
+            logAlertFiring("bracket_sell", "range_end/single qty=" + str.tostring(bracketShortQuantity, "#.##"))
+            fireAlert(_bracketSellJson)
+            if sendLifecycleAlerts
+                fireAlert(lifecycleEntryJson("entry_armed", bracketShortLifecycleTradeId, -1, bracketShortQuantity, shortEntry, "sell"))
+        else
+            shortOrderState := ORDER_INACTIVE
+            logAlertBlocked("bracket_sell", "not_armed qty=" + str.tostring(bracketShortQuantity, "#.##") + " cap=" + str.tostring(_entryCapacity))
+
+// Extend bracket target lines and labels after the range has formed.
+if not or_sesh and not na(long_tp_tg.ln)
+    long_tp_tg.ln.set_xy2(bar_index, long_tp)
+    long_tp_tg.lab.set_x(bar_index + rangeLabelOffsetBars)
+    long_tp_tg.lab.set_y(long_tp)
+    long_tp_tg.lab.set_text("L TP")
+    long_sl_tg.ln.set_xy2(bar_index, long_sl)
+    long_sl_tg.lab.set_x(bar_index + rangeLabelOffsetBars)
+    long_sl_tg.lab.set_y(long_sl)
+    long_sl_tg.lab.set_text("L SL")
+    short_tp_tg.ln.set_xy2(bar_index, short_tp)
+    short_tp_tg.lab.set_x(bar_index + rangeLabelOffsetBars)
+    short_tp_tg.lab.set_y(short_tp)
+    short_tp_tg.lab.set_text("S TP")
+    short_sl_tg.ln.set_xy2(bar_index, short_sl)
+    short_sl_tg.lab.set_x(bar_index + rangeLabelOffsetBars)
+    short_sl_tg.lab.set_y(short_sl)
+    short_sl_tg.lab.set_text("S SL")
+
+// Visual trade lifecycle for the formed range. Respects max entries per range, one-fill-per-side, and rearm settings.
+int maxEntriesThisRange = oneFillPerSidePerRange ? (maxBracketEntriesPerRange < 2 ? maxBracketEntriesPerRange : 2) : maxBracketEntriesPerRange
+
+// Post-close re-entry gating. A side is not ARMED until a fresh bracket order is dispatched.
+bool _longRearmEligible = longOrderState == ORDER_AWAITING_REARM and entriesThisRange < maxEntriesThisRange and (not oneFillPerSidePerRange or not longFilledThisRange)
+bool _longRearmCooldownReady = na(longCooldownAfterBar) or bar_index > longCooldownAfterBar
+bool _longRearmRangeReady = not na(longRearmAfterBar) and bar_index > longRearmAfterBar and not na(orh) and low <= orh
+if longOrderState == ORDER_AWAITING_REARM and not _longRearmEligible
+    longOrderState := ORDER_INACTIVE
+if _longRearmEligible and ((na(longRearmAfterBar) and _longRearmCooldownReady) or _longRearmRangeReady)
+    bracketLongLifecycleArmIndex += 1
+    bracketLongArmId := bracketId + "-long-arm-" + str.tostring(bracketLongLifecycleArmIndex)
+    bracketLongLifecycleTradeId := lifecycleBracketTradeId(bracketLongArmId, 1, 0)
+    bracketPlacedBar := bar_index
+    float _longRiskPerUnit = bracketLongSlDistance * pointValue
+    bracketLongQuantity := _longRiskPerUnit > 0 ? roundSizedQuantity(riskAmountUsd / _longRiskPerUnit) : quantityStep()
+    if bracketLongQuantity > 0
+        float _longTpPercent = longEntry != 0 ? math.abs(bracketLongTpDistance) / math.abs(longEntry) * 100.0 : 0.0
+        float _longSlPercent = longEntry != 0 ? math.abs(bracketLongSlDistance) / math.abs(longEntry) * 100.0 : 0.0
+        string _bracketBuyJson = rangeBracketAlertJson("buy", bracketLongQuantity, longEntry, long_sl, bracketLongArmId, "long", tradersPostRangeBracketExitFields(true, longEntry, bracketLongTpDistance, bracketLongSlDistance, _longTpPercent, _longSlPercent), "", "single")
+        longOrderState := ORDER_ARMED
+        longRearmAfterBar := na
+        longCooldownAfterBar := na
+        logAlertFiring("bracket_buy", "rearm/single qty=" + str.tostring(bracketLongQuantity, "#.##"))
+        fireAlert(_bracketBuyJson)
+        if sendLifecycleAlerts
+            fireAlert(lifecycleEntryJson("entry_armed", bracketLongLifecycleTradeId, 1, bracketLongQuantity, longEntry, "buy"))
+    else
+        longOrderState := ORDER_INACTIVE
+        longRearmAfterBar := na
+        longCooldownAfterBar := na
+        logAlertBlocked("bracket_buy", "rearm_zero_quantity")
+
+bool _shortRearmEligible = shortOrderState == ORDER_AWAITING_REARM and entriesThisRange < maxEntriesThisRange and (not oneFillPerSidePerRange or not shortFilledThisRange)
+bool _shortRearmCooldownReady = na(shortCooldownAfterBar) or bar_index > shortCooldownAfterBar
+bool _shortRearmRangeReady = not na(shortRearmAfterBar) and bar_index > shortRearmAfterBar and not na(orl) and high >= orl
+if shortOrderState == ORDER_AWAITING_REARM and not _shortRearmEligible
+    shortOrderState := ORDER_INACTIVE
+if _shortRearmEligible and ((na(shortRearmAfterBar) and _shortRearmCooldownReady) or _shortRearmRangeReady)
+    bracketShortLifecycleArmIndex += 1
+    bracketShortArmId := bracketId + "-short-arm-" + str.tostring(bracketShortLifecycleArmIndex)
+    bracketShortLifecycleTradeId := lifecycleBracketTradeId(bracketShortArmId, -1, 0)
+    bracketPlacedBar := bar_index
+    float _shortRiskPerUnit = bracketShortSlDistance * pointValue
+    bracketShortQuantity := _shortRiskPerUnit > 0 ? roundSizedQuantity(riskAmountUsd / _shortRiskPerUnit) : quantityStep()
+    if bracketShortQuantity > 0
+        float _shortTpPercent = shortEntry != 0 ? math.abs(bracketShortTpDistance) / math.abs(shortEntry) * 100.0 : 0.0
+        float _shortSlPercent = shortEntry != 0 ? math.abs(bracketShortSlDistance) / math.abs(shortEntry) * 100.0 : 0.0
+        string _bracketSellJson = rangeBracketAlertJson("sell", bracketShortQuantity, shortEntry, short_sl, bracketShortArmId, "short", tradersPostRangeBracketExitFields(false, shortEntry, bracketShortTpDistance, bracketShortSlDistance, _shortTpPercent, _shortSlPercent), "", "single")
+        shortOrderState := ORDER_ARMED
+        shortRearmAfterBar := na
+        shortCooldownAfterBar := na
+        logAlertFiring("bracket_sell", "rearm/single qty=" + str.tostring(bracketShortQuantity, "#.##"))
+        fireAlert(_bracketSellJson)
+        if sendLifecycleAlerts
+            fireAlert(lifecycleEntryJson("entry_armed", bracketShortLifecycleTradeId, -1, bracketShortQuantity, shortEntry, "sell"))
+    else
+        shortOrderState := ORDER_INACTIVE
+        shortRearmAfterBar := na
+        shortCooldownAfterBar := na
+        logAlertBlocked("bracket_sell", "rearm_zero_quantity")
+
+// Entry permission: a side may fill only when its order is armed, no trade is
+// running, the per-range cap has room, and any post-SL cooldown has elapsed.
+bool longEntryAllowed = not or_sesh and longOrderState == ORDER_ARMED and shortOrderState != ORDER_ACTIVE and entriesThisRange < maxEntriesThisRange and (na(longCooldownAfterBar) or bar_index > longCooldownAfterBar)
+
+// Long side. A fill happens when the armed order's level is traded on this bar.
+if longEntryAllowed and barSpansLevel(longEntry)
+    longOrderState := ORDER_ACTIVE
+    longFilledThisRange := true
+    longBeActive := false
+    longBeSl := na
+    entriesThisRange := entriesThisRange + 1
+    longEntryBar := bar_index
+    longEntryExecutionSeq := executionSeq
+    log.info("ULTRA 5.3 FILL long entry=" + str.tostring(longEntry, format.mintick) + " qty=" + str.tostring(bracketLongQuantity, "#.##") + " seq=" + str.tostring(executionSeq))
+    longEntryBarHigh := high
+    longEntryBarLow := low
+    if sendLifecycleAlerts and bracketLongQuantity > 0
+        fireAlert(lifecycleEntryJson("entry_filled", bracketLongLifecycleTradeId, 1, bracketLongQuantity, bracketLongEntryPrice, "buy"))
+    if showEntryIcons
+        array.push(longEntrySignals, longEntry)
+for entryPrice in longEntrySignals
+    array.push(signalLabels, label.new(bar_index, entryPrice, text = "▲", style = label.style_label_center, color = invis, textcolor = upSigColor, size = sigSize))
+// On the fill bar, OHLC cannot sequence a stop-entry against its own target
+// and stop when they all trade in one candle. Defer those ambiguous fills;
+// a gap fill at the bar's open (open >= longEntry) is deterministic, so only
+// a stop touch without a same-bar target touch can resolve it.
+bool _deferLongFill = not barstate.isrealtime and not na(longEntryBar) and bar_index == longEntryBar and not na(long_sl) and low <= long_sl and ((not na(long_tp) and high >= long_tp) or open < longEntry)
+if _deferLongFill
+    log.warning("ULTRA 5.3 DEFER long — fill-bar ambiguity (entry bar traded both stop and target); exit deferred")
+bool _longRealtimeEntryBar = barstate.isrealtime and not na(longEntryBar) and bar_index == longEntryBar
+bool _longExitReady = not _longRealtimeEntryBar or (not na(longEntryExecutionSeq) and executionSeq > longEntryExecutionSeq)
+bool _longNewEntryBarHigh = _longRealtimeEntryBar and not na(longEntryBarHigh) and high > longEntryBarHigh
+bool _longNewEntryBarLow = _longRealtimeEntryBar and not na(longEntryBarLow) and low < longEntryBarLow
+bool _longTpHit = _longRealtimeEntryBar ? close >= long_tp or (_longNewEntryBarHigh and high >= long_tp) : high >= long_tp
+bool _longBeTriggerHit = _longRealtimeEntryBar ? close >= longEntry + beTriggerTicks * _mintick or (_longNewEntryBarHigh and high >= longEntry + beTriggerTicks * _mintick) : high >= longEntry + beTriggerTicks * _mintick
+bool _longBeSlHit = _longRealtimeEntryBar ? close <= longBeSl or (_longNewEntryBarLow and low <= longBeSl) : low <= longBeSl
+bool _longSlHit = _longRealtimeEntryBar ? close <= long_sl or (_longNewEntryBarLow and low <= long_sl) : low <= long_sl
+if longOrderState == ORDER_ACTIVE and not _deferLongFill and _longExitReady
+    if not na(long_tp) and _longTpHit
+        log.info("ULTRA 5.3 EXIT long reason=tp px=" + str.tostring(long_tp, format.mintick))
+        bool _longCanRearmAfterTp = rearmSameSideStopAfterTp and entriesThisRange < maxEntriesThisRange and (not oneFillPerSidePerRange or not longFilledThisRange)
+        longOrderState := _longCanRearmAfterTp ? ORDER_AWAITING_REARM : ORDER_INACTIVE
+        longBeActive := false
+        if sendLifecycleAlerts and bracketLongQuantity > 0
+            fireAlert(lifecycleTradeClosedJson(bracketLongLifecycleTradeId, 1, 1, bracketLongQuantity, bracketLongEntryPrice, long_tp, "take_profit"))
+        if sigTog
+            array.push(longTpSignals, long_tp)
+        // After TP, the next entry cannot trigger until price trades back inside the range on a later bar.
+        if _longCanRearmAfterTp
+            longRearmAfterBar := bar_index
+        // Retire the opposite (short) arm if TP suppression is on or the range has no remaining entry capacity.
+        bool _shouldCancelShortAfterLongTp = shortOrderState == ORDER_ARMED and (suppressOppositeAfterTp or entriesThisRange >= maxEntriesThisRange)
+        if _shouldCancelShortAfterLongTp
+            if sendLifecycleAlerts and bracketShortQuantity > 0
+                string _shortCancelReason = suppressOppositeAfterTp ? "opposite_suppressed_after_tp" : "range_entry_capacity_reached"
+                fireAlert(lifecycleEntryCancelledJson(bracketShortLifecycleTradeId, -1, bracketShortQuantity, _shortCancelReason))
+            shortOrderState := ORDER_INACTIVE
+            shortRearmAfterBar := na
+            shortCooldownAfterBar := na
+    else if useBeStop and longBeActive and not na(longBeSl) and _longBeSlHit
+        log.info("ULTRA 5.3 EXIT long reason=be_stop px=" + str.tostring(longBeSl, format.mintick))
+        longOrderState := ORDER_INACTIVE
+        longBeActive := false
+        longRearmAfterBar := na
+        if sendLifecycleAlerts and bracketLongQuantity > 0
+            fireAlert(lifecycleTradeClosedJson(bracketLongLifecycleTradeId, 1, 1, bracketLongQuantity, bracketLongEntryPrice, longBeSl, "protected_stop"))
+        if sigTog
+            array.push(longBeSignals, longBeSl)
+        // Retire the opposite (short) arm if the range has exhausted its total entry capacity.
+        if shortOrderState == ORDER_ARMED and entriesThisRange >= maxEntriesThisRange
+            if sendLifecycleAlerts and bracketShortQuantity > 0
+                fireAlert(lifecycleEntryCancelledJson(bracketShortLifecycleTradeId, -1, bracketShortQuantity, "range_entry_capacity_reached"))
+            shortOrderState := ORDER_INACTIVE
+            shortRearmAfterBar := na
+            shortCooldownAfterBar := na
+    else if not na(long_sl) and _longSlHit
+        log.info("ULTRA 5.3 EXIT long reason=sl px=" + str.tostring(long_sl, format.mintick))
+        bool _longCanRearmAfterSl = rearmSameSideStopAfterSl and entriesThisRange < maxEntriesThisRange and (not oneFillPerSidePerRange or not longFilledThisRange)
+        longOrderState := _longCanRearmAfterSl ? ORDER_AWAITING_REARM : ORDER_INACTIVE
+        longBeActive := false
+        longRearmAfterBar := na
+        if sendLifecycleAlerts and bracketLongQuantity > 0
+            fireAlert(lifecycleTradeClosedJson(bracketLongLifecycleTradeId, 1, 1, bracketLongQuantity, bracketLongEntryPrice, long_sl, "stop_loss"))
+        if sigTog
+            array.push(longSlSignals, long_sl)
+        longCooldownAfterBar := slCooldownBars > 0 ? bar_index + slCooldownBars : na
+        // Retire the opposite (short) arm if the range has exhausted its total entry capacity.
+        if shortOrderState == ORDER_ARMED and entriesThisRange >= maxEntriesThisRange
+            if sendLifecycleAlerts and bracketShortQuantity > 0
+                fireAlert(lifecycleEntryCancelledJson(bracketShortLifecycleTradeId, -1, bracketShortQuantity, "range_entry_capacity_reached"))
+            shortOrderState := ORDER_INACTIVE
+            shortRearmAfterBar := na
+            shortCooldownAfterBar := na
+if longOrderState == ORDER_ACTIVE and not _deferLongFill and _longExitReady and useBeStop and not longBeActive and not na(longEntry) and _longBeTriggerHit
+    longBeActive := true
+    longBeSl := longEntry + beOffsetTicks * _mintick
+    log.info("ULTRA 5.3 BE long armed sl=" + str.tostring(longBeSl, format.mintick))
+if longOrderState == ORDER_ACTIVE and not _deferLongFill and _longExitReady and useBeStop and longBeActive and not na(longBeSl) and _longBeSlHit
+    log.info("ULTRA 5.3 EXIT long reason=be_stop px=" + str.tostring(longBeSl, format.mintick))
+    longOrderState := ORDER_INACTIVE
+    longBeActive := false
+    longRearmAfterBar := na
+    if sendLifecycleAlerts and bracketLongQuantity > 0
+        fireAlert(lifecycleTradeClosedJson(bracketLongLifecycleTradeId, 1, 1, bracketLongQuantity, bracketLongEntryPrice, longBeSl, "protected_stop"))
+    if sigTog
+        array.push(longBeSignals, longBeSl)
+    // Retire the opposite (short) arm if the range has exhausted its total entry capacity.
+    if shortOrderState == ORDER_ARMED and entriesThisRange >= maxEntriesThisRange
+        if sendLifecycleAlerts and bracketShortQuantity > 0
+            fireAlert(lifecycleEntryCancelledJson(bracketShortLifecycleTradeId, -1, bracketShortQuantity, "range_entry_capacity_reached"))
+        shortOrderState := ORDER_INACTIVE
+        shortRearmAfterBar := na
+        shortCooldownAfterBar := na
+
+// Short side. A fill happens when the armed order's level is traded on this bar.
+bool shortEntryAllowed = not or_sesh and shortOrderState == ORDER_ARMED and longOrderState != ORDER_ACTIVE and entriesThisRange < maxEntriesThisRange and (na(shortCooldownAfterBar) or bar_index > shortCooldownAfterBar)
+if shortEntryAllowed and barSpansLevel(shortEntry)
+    shortOrderState := ORDER_ACTIVE
+    shortFilledThisRange := true
+    shortBeActive := false
+    shortBeSl := na
+    entriesThisRange := entriesThisRange + 1
+    shortEntryBar := bar_index
+    shortEntryExecutionSeq := executionSeq
+    log.info("ULTRA 5.3 FILL short entry=" + str.tostring(shortEntry, format.mintick) + " qty=" + str.tostring(bracketShortQuantity, "#.##") + " seq=" + str.tostring(executionSeq))
+    shortEntryBarHigh := high
+    shortEntryBarLow := low
+    if sendLifecycleAlerts and bracketShortQuantity > 0
+        fireAlert(lifecycleEntryJson("entry_filled", bracketShortLifecycleTradeId, -1, bracketShortQuantity, bracketShortEntryPrice, "sell"))
+    if showEntryIcons
+        array.push(shortEntrySignals, shortEntry)
+for entryPrice in shortEntrySignals
+    array.push(signalLabels, label.new(bar_index, entryPrice, text = "▼", style = label.style_label_center, color = invis, textcolor = downSigColor, size = sigSize))
+// Same fill-bar ambiguity rule as the long side: defer the exit unless the
+// short filled at the bar's open and its target did not also trade.
+bool _deferShortFill = not barstate.isrealtime and not na(shortEntryBar) and bar_index == shortEntryBar and not na(short_sl) and high >= short_sl and ((not na(short_tp) and low <= short_tp) or open > shortEntry)
+if _deferShortFill
+    log.warning("ULTRA 5.3 DEFER short — fill-bar ambiguity (entry bar traded both stop and target); exit deferred")
+bool _shortRealtimeEntryBar = barstate.isrealtime and not na(shortEntryBar) and bar_index == shortEntryBar
+bool _shortExitReady = not _shortRealtimeEntryBar or (not na(shortEntryExecutionSeq) and executionSeq > shortEntryExecutionSeq)
+bool _shortNewEntryBarHigh = _shortRealtimeEntryBar and not na(shortEntryBarHigh) and high > shortEntryBarHigh
+bool _shortNewEntryBarLow = _shortRealtimeEntryBar and not na(shortEntryBarLow) and low < shortEntryBarLow
+bool _shortTpHit = _shortRealtimeEntryBar ? close <= short_tp or (_shortNewEntryBarLow and low <= short_tp) : low <= short_tp
+bool _shortBeTriggerHit = _shortRealtimeEntryBar ? close <= shortEntry - beTriggerTicks * _mintick or (_shortNewEntryBarLow and low <= shortEntry - beTriggerTicks * _mintick) : low <= shortEntry - beTriggerTicks * _mintick
+bool _shortBeSlHit = _shortRealtimeEntryBar ? close >= shortBeSl or (_shortNewEntryBarHigh and high >= shortBeSl) : high >= shortBeSl
+bool _shortSlHit = _shortRealtimeEntryBar ? close >= short_sl or (_shortNewEntryBarHigh and high >= short_sl) : high >= short_sl
+if shortOrderState == ORDER_ACTIVE and not _deferShortFill and _shortExitReady
+    if not na(short_tp) and _shortTpHit
+        log.info("ULTRA 5.3 EXIT short reason=tp px=" + str.tostring(short_tp, format.mintick))
+        bool _shortCanRearmAfterTp = rearmSameSideStopAfterTp and entriesThisRange < maxEntriesThisRange and (not oneFillPerSidePerRange or not shortFilledThisRange)
+        shortOrderState := _shortCanRearmAfterTp ? ORDER_AWAITING_REARM : ORDER_INACTIVE
+        shortBeActive := false
+        if sendLifecycleAlerts and bracketShortQuantity > 0
+            fireAlert(lifecycleTradeClosedJson(bracketShortLifecycleTradeId, -1, 1, bracketShortQuantity, bracketShortEntryPrice, short_tp, "take_profit"))
+        if sigTog
+            array.push(shortTpSignals, short_tp)
+        // After TP, the next entry cannot trigger until price trades back inside the range on a later bar.
+        if _shortCanRearmAfterTp
+            shortRearmAfterBar := bar_index
+        // Retire the opposite (long) arm if TP suppression is on or the range has no remaining entry capacity.
+        bool _shouldCancelLongAfterShortTp = longOrderState == ORDER_ARMED and (suppressOppositeAfterTp or entriesThisRange >= maxEntriesThisRange)
+        if _shouldCancelLongAfterShortTp
+            if sendLifecycleAlerts and bracketLongQuantity > 0
+                string _longCancelReason = suppressOppositeAfterTp ? "opposite_suppressed_after_tp" : "range_entry_capacity_reached"
+                fireAlert(lifecycleEntryCancelledJson(bracketLongLifecycleTradeId, 1, bracketLongQuantity, _longCancelReason))
+            longOrderState := ORDER_INACTIVE
+            longRearmAfterBar := na
+            longCooldownAfterBar := na
+    else if useBeStop and shortBeActive and not na(shortBeSl) and _shortBeSlHit
+        log.info("ULTRA 5.3 EXIT short reason=be_stop px=" + str.tostring(shortBeSl, format.mintick))
+        shortOrderState := ORDER_INACTIVE
+        shortBeActive := false
+        shortRearmAfterBar := na
+        if sendLifecycleAlerts and bracketShortQuantity > 0
+            fireAlert(lifecycleTradeClosedJson(bracketShortLifecycleTradeId, -1, 1, bracketShortQuantity, bracketShortEntryPrice, shortBeSl, "protected_stop"))
+        if sigTog
+            array.push(shortBeSignals, shortBeSl)
+        // Retire the opposite (long) arm if the range has exhausted its total entry capacity.
+        if longOrderState == ORDER_ARMED and entriesThisRange >= maxEntriesThisRange
+            if sendLifecycleAlerts and bracketLongQuantity > 0
+                fireAlert(lifecycleEntryCancelledJson(bracketLongLifecycleTradeId, 1, bracketLongQuantity, "range_entry_capacity_reached"))
+            longOrderState := ORDER_INACTIVE
+            longRearmAfterBar := na
+            longCooldownAfterBar := na
+    else if not na(short_sl) and _shortSlHit
+        log.info("ULTRA 5.3 EXIT short reason=sl px=" + str.tostring(short_sl, format.mintick))
+        bool _shortCanRearmAfterSl = rearmSameSideStopAfterSl and entriesThisRange < maxEntriesThisRange and (not oneFillPerSidePerRange or not shortFilledThisRange)
+        shortOrderState := _shortCanRearmAfterSl ? ORDER_AWAITING_REARM : ORDER_INACTIVE
+        shortBeActive := false
+        shortRearmAfterBar := na
+        if sendLifecycleAlerts and bracketShortQuantity > 0
+            fireAlert(lifecycleTradeClosedJson(bracketShortLifecycleTradeId, -1, 1, bracketShortQuantity, bracketShortEntryPrice, short_sl, "stop_loss"))
+        if sigTog
+            array.push(shortSlSignals, short_sl)
+        shortCooldownAfterBar := slCooldownBars > 0 ? bar_index + slCooldownBars : na
+        // Retire the opposite (long) arm if the range has exhausted its total entry capacity.
+        if longOrderState == ORDER_ARMED and entriesThisRange >= maxEntriesThisRange
+            if sendLifecycleAlerts and bracketLongQuantity > 0
+                fireAlert(lifecycleEntryCancelledJson(bracketLongLifecycleTradeId, 1, bracketLongQuantity, "range_entry_capacity_reached"))
+            longOrderState := ORDER_INACTIVE
+            longRearmAfterBar := na
+            longCooldownAfterBar := na
+if shortOrderState == ORDER_ACTIVE and not _deferShortFill and _shortExitReady and useBeStop and not shortBeActive and not na(shortEntry) and _shortBeTriggerHit
+    shortBeActive := true
+    shortBeSl := shortEntry - beOffsetTicks * _mintick
+    log.info("ULTRA 5.3 BE short armed sl=" + str.tostring(shortBeSl, format.mintick))
+if shortOrderState == ORDER_ACTIVE and not _deferShortFill and _shortExitReady and useBeStop and shortBeActive and not na(shortBeSl) and _shortBeSlHit
+    log.info("ULTRA 5.3 EXIT short reason=be_stop px=" + str.tostring(shortBeSl, format.mintick))
+    shortOrderState := ORDER_INACTIVE
+    shortBeActive := false
+    shortRearmAfterBar := na
+    if sendLifecycleAlerts and bracketShortQuantity > 0
+        fireAlert(lifecycleTradeClosedJson(bracketShortLifecycleTradeId, -1, 1, bracketShortQuantity, bracketShortEntryPrice, shortBeSl, "protected_stop"))
+    if sigTog
+        array.push(shortBeSignals, shortBeSl)
+    // Retire the opposite (long) arm if the range has exhausted its total entry capacity.
+    if longOrderState == ORDER_ARMED and entriesThisRange >= maxEntriesThisRange
+        if sendLifecycleAlerts and bracketLongQuantity > 0
+            fireAlert(lifecycleEntryCancelledJson(bracketLongLifecycleTradeId, 1, bracketLongQuantity, "range_entry_capacity_reached"))
+        longOrderState := ORDER_INACTIVE
+        longRearmAfterBar := na
+        longCooldownAfterBar := na
+
+//─── Debug tracing ─────────────────────────────────────────────────────────────
+// Per-bar watch on the out-of-session window (verbose only). For ~24h ranges
+// the trading window is only a few bars — this shows whether it ever opens
+// and what the order state does inside it.
+if debugVerbose and activeRangeEnabled and not or_sesh
+    log.info("ULTRA 5.3 OUT-SESH t=" + str.format_time(time, "MM-dd HH:mm", tz) + " bar=" + str.tostring(bar_index) + " orh=" + str.tostring(orh, format.mintick) + " orl=" + str.tostring(orl, format.mintick) + " long=" + f_stateName(longOrderState) + "@" + str.tostring(longEntry, format.mintick) + " short=" + f_stateName(shortOrderState) + "@" + str.tostring(shortEntry, format.mintick) + " canL=" + str.tostring(longEntryAllowed) + " canS=" + str.tostring(shortEntryAllowed) + " rt=" + str.tostring(barstate.isrealtime))
+// In-session heartbeat (verbose only): shows the range still accumulating.
+if debugVerbose and or_sesh and bar_index % 240 == 0
+    log.info("ULTRA 5.3 IN-SESH t=" + str.format_time(time, "MM-dd HH:mm", tz) + " orh=" + str.tostring(orh, format.mintick) + " orl=" + str.tostring(orl, format.mintick))
+// Order-state transition trace — unconditional so every arm/fill/exit/wipe is
+// captured even with verbose off. The last-logged varip makes each transition
+// log exactly once, including intrabar changes on realtime bars.
+if longOrderState != lastLongStateLogged
+    log.info("ULTRA 5.3 STATE long " + f_stateName(lastLongStateLogged) + "->" + f_stateName(longOrderState) + " t=" + str.format_time(time, "MM-dd HH:mm", tz) + " entries=" + str.tostring(entriesThisRange) + " rt=" + str.tostring(barstate.isrealtime))
+    lastLongStateLogged := longOrderState
+if shortOrderState != lastShortStateLogged
+    log.info("ULTRA 5.3 STATE short " + f_stateName(lastShortStateLogged) + "->" + f_stateName(shortOrderState) + " t=" + str.format_time(time, "MM-dd HH:mm", tz) + " entries=" + str.tostring(entriesThisRange) + " rt=" + str.tostring(barstate.isrealtime))
+    lastShortStateLogged := shortOrderState
+
+// Current-bar exit icons are redrawn from persisted prices after realtime rollback.
+for exitPrice in longTpSignals
+    array.push(signalLabels, label.new(bar_index, exitPrice, text = "◆", style = label.style_label_center, color = invis, textcolor = #089981, size = sigSize))
+for exitPrice in shortTpSignals
+    array.push(signalLabels, label.new(bar_index, exitPrice, text = "◆", style = label.style_label_center, color = invis, textcolor = #089981, size = sigSize))
+for exitPrice in longSlSignals
+    array.push(signalLabels, label.new(bar_index, exitPrice, text = "✕", style = label.style_label_center, color = invis, textcolor = #f23645, size = sigSize))
+for exitPrice in shortSlSignals
+    array.push(signalLabels, label.new(bar_index, exitPrice, text = "✕", style = label.style_label_center, color = invis, textcolor = #f23645, size = sigSize))
+for exitPrice in longBeSignals
+    array.push(signalLabels, label.new(bar_index, exitPrice, text = "✕", style = label.style_label_center, color = invis, textcolor = color.black, size = sigSize))
+for exitPrice in shortBeSignals
+    array.push(signalLabels, label.new(bar_index, exitPrice, text = "✕", style = label.style_label_center, color = invis, textcolor = color.black, size = sigSize))
+
+//---------------------------------------------------------------------------------------------------------------------}
+//Settings Info Panel
+//---------------------------------------------------------------------------------------------------------------------{
+
+renderPresetInfoPanel() =>
+    color panelBg = useLightTableTheme ? #f1f5f9 : #111827
+    color panelBorder = useLightTableTheme ? #94a3b8 : #334155
+    color panelHeader = useLightTableTheme ? #2563eb : #1d4ed8
+    color panelLabel = useLightTableTheme ? #475569 : #94a3b8
+    color panelValue = useLightTableTheme ? #0f172a : #e2e8f0
+    color panelMuted = useLightTableTheme ? #64748b : #64748b
+    color panelAccent = useLightTableTheme ? #0f5cc0 : #38bdf8
+    color panelWarning = useLightTableTheme ? #b45309 : #fbbf24
+    bool rangeSessionOverridden = crSesh != activeRangeSession
+    bool riskOverridden = riskAmountUsd != presetRiskAmountUsd
+    bool entriesOverridden = maxBracketEntriesPerRange != presetEntriesPerRange
+    bool tpStyleOverridden = tpStyle != presetTpStyle
+    bool tpTicksOverridden = tpTicksOverride != presetTpTicksOverride
+    bool slStyleOverridden = slStyle != presetSlStyle
+    bool slTicksOverridden = slTicksOverride != presetSlTicksOverride
+    string presetTpLabel = presetTpStyle == "Ticks" ? str.tostring(presetTpTicksOverride) + " ticks" : presetTpStyle
+    string tpLabel = tpStyle == "Ticks" ? str.tostring(tpTicksOverride) + " ticks" : tpStyle
+    string presetSlLabel = presetSlStyle == "Ticks" ? str.tostring(presetSlTicksOverride) + " ticks" : presetSlStyle
+    string slLabel = slStyle == "Ticks" ? str.tostring(slTicksOverride) + " ticks" : slStyle
+    string riskLabel = "$" + str.tostring(riskAmountUsd, "#.##") + (riskOverridden ? " / P $" + str.tostring(presetRiskAmountUsd, "#.##") : "")
+    string entriesLabel = str.tostring(maxBracketEntriesPerRange) + (entriesOverridden ? " / P " + str.tostring(presetEntriesPerRange) : "")
+    float _buyQty = na
+    float _sellQty = na
+    if not na(orh) and not na(orl)
+        float _rangeDistance = orh - orl
+        float _buySlDist = stopStyleDistance(slStyle, slTicksOverride, _rangeDistance, _mintick)
+        float _sellSlDist = stopStyleDistance(slStyle, slTicksOverride, _rangeDistance, _mintick)
+        _buyQty := _buySlDist > 0 ? riskAmountUsd / (_buySlDist * pointValue) : na
+        _sellQty := _sellSlDist > 0 ? riskAmountUsd / (_sellSlDist * pointValue) : na
+    string quantityLabel = not na(_buyQty) and not na(_sellQty) ? str.tostring(_buyQty, "#.##") + " / " + str.tostring(_sellQty, "#.##") : "N/A / N/A"
+    string afterTpLabel = rearmSameSideStopAfterTp ? "Rearm Same (Range Return)" : suppressOppositeAfterTp ? "Suppress Opposite" : "Keep Opposite"
+    string beStopLabel = useBeStop ? "On" : "Off"
+    string beTriggerLabel = useBeStop ? str.tostring(beTriggerTicks) + " ticks" : "N/A"
+    string beOffsetLabel = useBeStop ? str.tostring(beOffsetTicks) + " ticks" : "N/A"
+    string presetBeStopLabel = presetUseBeStopEnabled ? "On" : "Off"
+    string presetStatusLabel = activeRangeEnabled ? "Active" : "Inactive: no range"
+    color presetStatusColor = activeRangeEnabled ? panelAccent : panelWarning
+    var table info = table.new(position.bottom_right, 2, 16, bgcolor = panelBg, border_width = 1, border_color = panelBorder)
+    table.cell(info, 0, 0, "ULTRA", text_color = color.white, bgcolor = orColor, text_size = size.large, text_halign = text.align_left)
+    table.cell(info, 1, 0, "5.3", text_color = color.white, bgcolor = orColor, text_size = size.large, text_halign = text.align_right)
+    table.cell(info, 0, 1, "Range", text_color = color.black, bgcolor = color.from_gradient(1.0, 0.0, 3.0, #ff00ff, #ffff00), text_size = size.normal, text_halign = text.align_left)
+    table.cell(info, 1, 1, activeRangeName, text_color = color.black, bgcolor = color.from_gradient(1.0, 0.0, 3.0, #ff00ff, #ffff00), text_size = size.normal, text_halign = text.align_right)
+    table.cell(info, 0, 2, "Preset Status", text_color = color.black, bgcolor = color.from_gradient(2.0, 0.0, 3.0, #ff00ff, #ffff00), text_size = size.normal, text_halign = text.align_left)
+    table.cell(info, 1, 2, presetStatusLabel, text_color = color.black, bgcolor = color.from_gradient(2.0, 0.0, 3.0, #ff00ff, #ffff00), text_size = size.normal, text_halign = text.align_right)
+    table.cell(info, 0, 3, "Chart / Preset", text_color = color.black, bgcolor = color.from_gradient(3.0, 0.0, 3.0, #ff00ff, #ffff00), text_size = size.normal, text_halign = text.align_left)
+    table.cell(info, 1, 3, syminfo.ticker + " / " + presetInstrument, text_color = color.black, bgcolor = color.from_gradient(3.0, 0.0, 3.0, #ff00ff, #ffff00), text_size = size.normal, text_halign = text.align_right)
+    table.cell(info, 0, 4, "Range Session", text_color = panelLabel, text_size = size.normal, text_halign = text.align_left)
+    table.cell(info, 1, 4, crSesh + (rangeSessionOverridden ? " / P " + activeRangeSession : ""), text_color = rangeSessionOverridden ? panelAccent : activeRangeEnabled ? panelValue : panelMuted, text_size = size.normal, text_halign = text.align_right)
+    table.cell(info, 0, 5, "Risk / Trade", text_color = panelLabel, text_size = size.normal, text_halign = text.align_left)
+    table.cell(info, 1, 5, riskLabel, text_color = riskOverridden ? panelAccent : panelValue, text_size = size.normal, text_halign = text.align_right)
+    table.cell(info, 0, 6, "Entries / Range", text_color = panelLabel, text_size = size.normal, text_halign = text.align_left)
+    table.cell(info, 1, 6, entriesLabel, text_color = entriesOverridden ? panelAccent : panelValue, text_size = size.normal, text_halign = text.align_right)
+    table.cell(info, 0, 7, "TP", text_color = panelLabel, text_size = size.normal, text_halign = text.align_left)
+    table.cell(info, 1, 7, tpLabel + ((tpStyleOverridden or tpTicksOverridden) ? " / P " + presetTpLabel : ""), text_color = tpStyleOverridden or tpTicksOverridden ? panelAccent : panelValue, text_size = size.normal, text_halign = text.align_right)
+    table.cell(info, 0, 8, "SL", text_color = panelLabel, text_size = size.normal, text_halign = text.align_left)
+    table.cell(info, 1, 8, slLabel + ((slStyleOverridden or slTicksOverridden) ? " / P " + presetSlLabel : ""), text_color = slStyleOverridden or slTicksOverridden ? panelAccent : panelValue, text_size = size.normal, text_halign = text.align_right)
+    table.cell(info, 0, 9, "Buy / Sell Qty", text_color = panelLabel, text_size = size.normal, text_halign = text.align_left)
+    table.cell(info, 1, 9, quantityLabel, text_color = panelValue, text_size = size.normal, text_halign = text.align_right)
+    table.cell(info, 0, 10, "Entry Offset", text_color = panelLabel, text_size = size.normal, text_halign = text.align_left)
+    table.cell(info, 1, 10, str.tostring(bracketEntryOffsetTicks) + " ticks", text_color = bracketEntryOffsetTicks != 0 ? panelAccent : panelMuted, text_size = size.normal, text_halign = text.align_right)
+    table.cell(info, 0, 11, "After SL", text_color = panelLabel, text_size = size.normal, text_halign = text.align_left)
+    table.cell(info, 1, 11, rearmSameSideStopAfterSl ? "Rearm Same Side" : "No Re-entry", text_color = rearmSameSideStopAfterSl ? panelAccent : panelMuted, text_size = size.normal, text_halign = text.align_right)
+    table.cell(info, 0, 12, "After TP", text_color = panelLabel, text_size = size.normal, text_halign = text.align_left)
+    table.cell(info, 1, 12, afterTpLabel, text_color = rearmSameSideStopAfterTp or true ? panelAccent : panelMuted, text_size = size.normal, text_halign = text.align_right)
+    table.cell(info, 0, 13, "BE Stop", text_color = panelLabel, text_size = size.normal, text_halign = text.align_left)
+    table.cell(info, 1, 13, beStopLabel + (beStopOverridden ? " / P " + presetBeStopLabel : ""), text_color = beStopOverridden ? panelAccent : (useBeStop ? panelValue : panelMuted), text_size = size.normal, text_halign = text.align_right)
+    table.cell(info, 0, 14, "BE Trigger", text_color = panelLabel, text_size = size.normal, text_halign = text.align_left)
+    table.cell(info, 1, 14, beTriggerLabel + (beTriggerOverridden ? " / P " + str.tostring(presetBeTriggerTicks) + " ticks" : ""), text_color = beTriggerOverridden ? panelAccent : (useBeStop ? panelValue : panelMuted), text_size = size.normal, text_halign = text.align_right)
+    table.cell(info, 0, 15, "BE Offset", text_color = panelLabel, text_size = size.normal, text_halign = text.align_left)
+    table.cell(info, 1, 15, beOffsetLabel + (beOffsetOverridden ? " / P " + str.tostring(presetBeOffsetTicks) + " ticks" : ""), text_color = beOffsetOverridden ? panelAccent : (useBeStop ? panelValue : panelMuted), text_size = size.normal, text_halign = text.align_right)
+
+// Dispatch any queued, de-duplicated alerts
+if array.size(alertQueue) > 0
+    for i = 0 to array.size(alertQueue) - 1
+        alert(array.get(alertQueue, i), alert.freq_all)
+        if debugVerbose
+            log.info("ULTRA 5.3 ALERT[" + str.tostring(i) + "] " + array.get(alertQueue, i))
+    log.info("ULTRA 5.3 DISPATCH alerts=" + str.tostring(array.size(alertQueue)))
+array.clear(alertQueue)
+
+if showPresetInfo and barstate.islast
+    renderPresetInfoPanel()
+

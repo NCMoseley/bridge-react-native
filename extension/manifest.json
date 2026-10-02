@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "Bridge",
+  "version": "1.0.0",
+  "description": "Receives reviewed TradingView order drafts and presents them for manual Tradovate submission.",
+  "icons": {
+    "128": "icon.png"
+  },
+  "permissions": ["alarms", "notifications", "storage", "tabs", "scripting"],
+  "host_permissions": ["https://trader.tradovate.com/*"],
+  "optional_host_permissions": ["https://*/*", "http://localhost/*"],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Bridge",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "128": "icon.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://trader.tradovate.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

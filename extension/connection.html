@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="popup.css">
+    <title>Connect Tradovate Demo</title>
+  </head>
+  <body>
+    <main class="review-page">
+      <h1>Connect Tradovate demo</h1>
+      <p>Credentials are sent over HTTPS and encrypted on the relay. They are not saved in Chrome.</p>
+      <form id="connection-form">
+        <label>Username <input id="username" autocomplete="username" required></label>
+        <label>Password <input id="password" type="password" autocomplete="current-password" required></label>
+        <label>API CID <input id="cid" autocomplete="off" required></label>
+        <label>API secret <input id="sec" type="password" autocomplete="off" required></label>
+        <button type="submit">Connect demo account</button>
+      </form>
+      <p id="connection-status" role="status"></p>
+      <div id="accounts" aria-live="polite"></div>
+    </main>
+    <script type="module" src="connection.js"></script>
+  </body>
+</html>
