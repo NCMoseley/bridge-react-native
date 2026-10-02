@@ -8574,7 +8574,11 @@ export function createApp(
           proxyAlertId: delivery.proxyAlertId,
           proxyDeliveryId: delivery.id,
           destination: crossTrade ? 'crosstrade' : 'traderspost',
-          payloadJson: outboundPayloadJsons[i],
+          // Snapshot the policy-applied payload (BE/OCO/current range config)
+          // — retries replay THIS, immune to later config changes.
+          payloadJson: crossTrade
+            ? JSON.stringify(applyCrossTradeRangePolicy(ctPayload as TradersPostPayload))
+            : outboundPayloadJsons[i],
           occurredAt: context?.occurredAt ?? delivery.createdAt,
         });
         // Stop-only ranges refuse non-stop entries at the wire: a limit/market
@@ -11191,8 +11195,9 @@ export function createApp(
             const owner = r.ownerStrategy?.name ?? r.ownerStrategy?.displayName;
             if (owner && otherRangeStrategies.has(owner)) return false;
             // Without ownerStrategy, a leg is only plausible protection when it
-            // covers no more than the entry's filled quantity and was submitted
-            // after the entry — an unrelated manual order on the same
+            // covers no more than the entry's filled quantity, was submitted
+            // after the entry, AND sits at the level this range's configured
+            // SL/TP implies — an unrelated manual stop/target on the same
             // instrument must not count as this bracket's protection.
             const legQty = typeof r.quantity === 'number' ? r.quantity : undefined;
             const entryQty = typeof nt8Row.filled === 'number' && nt8Row.filled > 0 ? nt8Row.filled : nt8Row.quantity;
@@ -11200,7 +11205,19 @@ export function createApp(
             const entryTime = Date.parse(String(nt8Row.time ?? ''));
             const legTime = Date.parse(String(r.time ?? ''));
             if (Number.isFinite(entryTime) && Number.isFinite(legTime) && legTime < entryTime) return false;
-            return true;
+            const entryPx = typeof nt8Row.averageFillPrice === 'number' ? nt8Row.averageFillPrice : undefined;
+            const tick = inferredTickSize(String(nt8Row.instrument ?? ''));
+            if (entryPx == null || !(tick > 0)) return false;
+            const dir = String(nt8Row.orderAction ?? '').toLowerCase() === 'buy' ? 1 : -1;
+            const slTicks = (config?.stopLossTicksCents ?? 0) / 100;
+            const tpTicks = (config?.takeProfitTicksCents ?? 0) / 100;
+            if (!(slTicks > 0) && !(tpTicks > 0)) return false; // nothing configured → nothing to validate against
+            const tol = tick * 2;
+            if (slTicks > 0 && typeof r.stopPrice === 'number' && r.stopPrice !== 0
+                && Math.abs(r.stopPrice - (entryPx - dir * slTicks * tick)) <= tol) return true;
+            if (tpTicks > 0 && typeof r.limitPrice === 'number' && r.limitPrice !== 0
+                && Math.abs(r.limitPrice - (entryPx + dir * tpTicks * tick)) <= tol) return true;
+            return false;
           });
     const stopLeg = legs.find((r) => typeof r.stopPrice === 'number' && r.stopPrice !== 0);
     const targetLeg = legs.find((r) => typeof r.limitPrice === 'number' && r.limitPrice !== 0);
@@ -11392,14 +11409,14 @@ export function createApp(
       // and no open monitor. Without this, manual/missed-alert P&L stays
       // invisible. Surface once per order id; never journal a row.
       const knownRangeNames = new Set(database.listRangeConfigurations().map((c) => c.rangeName));
-      const ledgerOrderIds = new Set(
-        database.listEntryBrokerOrdersByAccount(account.id)
-          .filter((o) => o.destination === 'crosstrade')
-          .flatMap((o) => [o.orderId, ctWireOrderId(o.orderId)]),
-      );
+      const ledgerEntries = database.listEntryBrokerOrdersByAccount(account.id)
+        .filter((o) => o.destination === 'crosstrade');
       for (const o of orders) {
         if (mapNt8OrderState(String(o.orderState ?? '')) !== 'filled') continue;
-        if (!o.id || ledgerOrderIds.has(String(o.id))) continue;
+        // NT8 can echo the wire id in id/orderId/userData/automatedTradingOrderId
+        // /name — or only via oco_id for plain non-ATM entries — so a bare id
+        // set misses real matches. matchesCtOrderId covers all the forms.
+        if (ledgerEntries.some((e) => matchesCtOrderId(o, e.orderId, e.action))) continue;
         const owner = o.ownerStrategy?.name ?? o.ownerStrategy?.displayName;
         if (owner && knownRangeNames.has(owner)) continue; // range-owned legs attribute elsewhere
         const fillKey = `orphanfill:${account.id}:${String(o.id)}`;
@@ -12125,7 +12142,8 @@ export function createApp(
       // Original price stays on the wire — retries never re-read the level.
       const wireId = `${row.bracketId}-a${allAttempts.length}`;
       const retryPayload = { ...parsed, bracketId: wireId } as TradersPostPayload;
-      const message = toCrossTradeMessage(crossTradeRangePolicy(retryPayload, row.rangeName), ctDestination, 'sweep-retry');
+      // Snapshot is already policy-applied — send it as stored, no re-derive.
+      const message = toCrossTradeMessage(retryPayload, ctDestination, 'sweep-retry');
       const orderId = `${wireId}-r${allAttempts.length}`;
       const sentAt = new Date().toISOString();
       database.upsertBrokerOrder({
@@ -12179,7 +12197,7 @@ export function createApp(
           // Skipped when another bracket shares the instrument — an
           // instrument-wide cancel would kill unrelated legs; then we warn.
           const siblingBracketId = row.bracketId?.replace(/-(long|short)(?=-|$)(?![\s\S]*-(?:long|short)(?=-|$))/, (_, s) => `-${s === 'long' ? 'short' : 'long'}`);
-          let siblingToRePair: { orderId: string; payloadJson: string } | undefined;
+          let siblingToRePair: { orderId: string; payloadJson: string; proxyDeliveryId?: string; proxyAlertId?: string } | undefined;
           let ocoUnpairedWarn = false;
           if (siblingBracketId && siblingBracketId !== row.bracketId) {
             const sibling = database.listBracketMonitorEntriesForAdoption(account.id)
@@ -12188,7 +12206,7 @@ export function createApp(
               ? database.listEntryBrokerOrdersByAccount(account.id)
                 .filter((o) => o.destination === 'crosstrade' && o.bracketId === siblingBracketId
                   && (o.action === 'buy' || o.action === 'sell'))
-                .find((o) => o.status === 'acknowledged' || o.status === 'pending')
+                .find((o) => o.status === 'acknowledged' || o.status === 'pending' || o.status === 'uncertain')
               : undefined;
             if (sibling && siblingEntry?.payloadJson) {
               const bookRoot = continuousTickerRoot(latest.instrument ?? String(parsed.ticker));
@@ -12217,8 +12235,13 @@ export function createApp(
                   const cancelBody = await cancelRes.text();
                   const cancelOk = cancelRes.ok && interpretCrossTradeResponse(cancelRes.status, cancelBody)?.success === true;
                   if (cancelOk) {
-                    database.updateBrokerOrderStatus(account.id, siblingEntry.orderId, 'cancelled', 'OCO re-pair: resending under fresh group', delivery.id, 'bridge');
-                    siblingToRePair = { orderId: siblingEntry.orderId, payloadJson: siblingEntry.payloadJson };
+                    // Cancel belongs to the SIBLING's delivery — the failed
+                    // arm's delivery id here would corrupt audit linkage.
+                    database.updateBrokerOrderStatus(account.id, siblingEntry.orderId, 'cancelled', 'OCO re-pair: resending under fresh group', siblingEntry.proxyDeliveryId, 'bridge');
+                    siblingToRePair = {
+                      orderId: siblingEntry.orderId, payloadJson: siblingEntry.payloadJson,
+                      proxyDeliveryId: siblingEntry.proxyDeliveryId, proxyAlertId: siblingEntry.proxyAlertId,
+                    };
                   } else {
                     ocoUnpairedWarn = true;
                   }
@@ -12275,8 +12298,9 @@ export function createApp(
             if (hardTimeoutHandle) clearTimeout(hardTimeoutHandle);
           }
           if (released()) {
-            // The queue watchdog released while in flight — the queue-level
-            // failure path owns the ledger; do not write alongside a newer task.
+            // The watchdog released while in flight — no outer owner resolves
+            // this row, and the send may have reached the broker: uncertain.
+            database.updateBrokerOrderStatus(account.id, orderId, 'uncertain', 'queue released while send in flight', delivery.id);
             return;
           }
           if (fetchError || !response) {
@@ -12329,7 +12353,7 @@ export function createApp(
             if (sibParsed && typeof sibParsed.bracketId === 'string') {
               const sibWireId = `${siblingBracketId}-a${allAttempts.length}`;
               const sibPayload = { ...sibParsed, bracketId: sibWireId } as TradersPostPayload;
-              const sibMsg = toCrossTradeMessage(crossTradeRangePolicy(sibPayload, row.rangeName), ctDestination, 'sweep-repair');
+              const sibMsg = toCrossTradeMessage(sibPayload, ctDestination, 'sweep-repair');
               const sibOrderId = `${sibWireId}-r${allAttempts.length}`;
               database.upsertBrokerOrder({
                 accountId: account.id,
@@ -12344,6 +12368,8 @@ export function createApp(
                 price: typeof sibParsed.price === 'number' ? sibParsed.price : undefined,
                 stopPrice: typeof sibParsed.stopPrice === 'number' ? sibParsed.stopPrice : undefined,
                 limitPrice: typeof sibParsed.limitPrice === 'number' ? sibParsed.limitPrice : undefined,
+                proxyAlertId: siblingToRePair.proxyAlertId,
+                proxyDeliveryId: siblingToRePair.proxyDeliveryId,
                 destination: 'crosstrade',
                 payloadJson: siblingToRePair.payloadJson,
                 occurredAt: new Date().toISOString(),
@@ -12355,16 +12381,27 @@ export function createApp(
                   signal: AbortSignal.any([limiterSignal, taskSignal]),
                 });
                 const sibBody = await sibRes.text();
+                if (released()) {
+                  // Released mid-POST — the send may have landed; the row we
+                  // created can't stay pending forever.
+                  database.updateBrokerOrderStatus(account.id, sibOrderId, 'uncertain', 'queue released while send in flight', siblingToRePair.proxyDeliveryId);
+                  return;
+                }
                 const sibOk = sibRes.ok && interpretCrossTradeResponse(sibRes.status, sibBody)?.success === true;
                 database.updateBrokerOrderStatus(account.id, sibOrderId, sibOk ? 'acknowledged' : 'uncertain',
-                  sibOk ? undefined : sibBody.slice(0, 500), delivery.id);
+                  sibOk ? undefined : sibBody.slice(0, 500), siblingToRePair.proxyDeliveryId);
                 database.createBridgeLog(account.userId, 'crosstrade', {
                   event: 'crossTradeOcoRepaired', accountId: account.id, bracketId: siblingBracketId,
                   orderId: sibOrderId, wireId: sibWireId, success: sibOk,
                 });
               } catch (error) {
+                if (released()) {
+                  // Fetch aborted by watchdog — the send may have landed.
+                  database.updateBrokerOrderStatus(account.id, sibOrderId, 'uncertain', 'queue released while send in flight', siblingToRePair.proxyDeliveryId);
+                  return;
+                }
                 const sibErr = error instanceof Error ? error.message : String(error);
-                database.updateBrokerOrderStatus(account.id, sibOrderId, 'uncertain', sibErr, delivery.id);
+                database.updateBrokerOrderStatus(account.id, sibOrderId, 'uncertain', sibErr, siblingToRePair.proxyDeliveryId);
                 database.createBridgeLog(account.userId, 'crosstrade', {
                   event: 'crossTradeOcoRepaired', accountId: account.id, bracketId: siblingBracketId,
                   orderId: sibOrderId, wireId: sibWireId, success: false, failureMessage: sibErr,
@@ -13197,6 +13234,9 @@ export function createApp(
     return currentMinutes >= scheduledMinutes && currentMinutes <= scheduledMinutes + MAX_EOD_RETRY_MINUTES;
   };
   const lastNewsFlattenByEventKey = new Map<string, string>();
+  // One persistent summary toast per account per flatten event/day.
+  const eodToastByKey = new Map<string, string>();
+  const newsToastByKey = new Map<string, string>();
   // Drafts marked at EOD once per user per day — the exit window opening is
   // the "day is done" signal; pending drafts are stale by then anyway.
   const draftsSubmittedEodByKey = new Set<string>();
@@ -13258,6 +13298,10 @@ export function createApp(
           }
           return roots;
         };
+        // Per-account EOD summary — collects this pass's send outcomes and
+        // local-only closes so the operator gets one persistent toast per
+        // account per day instead of digging through stdout logs.
+        const eodReport = { sends: [] as Promise<boolean>[], localCloses: 0 };
         try {
 
         if (isWithinEodWindow(cancelTime, currentTimeKey)) {
@@ -13277,6 +13321,7 @@ export function createApp(
                 extras: { rangeName: order.rangeName ?? '', reason: 'eod_cancel' },
               }, now.toISOString());
               lastEodRunDateByKey.set(cancelKey, currentDateKey);
+              eodReport.localCloses++;
               console.warn('[eod-scheduler] EOD cancel retries exhausted; recorded local close', { accountId, bracketId: order.bracketId, cancelKey });
               continue;
             }
@@ -13307,6 +13352,7 @@ export function createApp(
             if (!eodCanSend) {
               recordBridgeGeneratedEntryCancelled({ userId, accountId }, cancelPayload, now.toISOString());
               lastEodRunDateByKey.set(cancelKey, currentDateKey);
+              eodReport.localCloses++;
               console.info('[eod-scheduler] Recorded local EOD cancel (no TradersPost destination)', { accountId, bracketId: order.bracketId, cancelKey });
               continue;
             }
@@ -13315,6 +13361,7 @@ export function createApp(
             if (!routeId) {
               recordBridgeGeneratedEntryCancelled({ userId, accountId }, cancelPayload, now.toISOString());
               lastEodRunDateByKey.set(cancelKey, currentDateKey);
+              eodReport.localCloses++;
               console.warn('[eod-scheduler] EOD cancel route missing; recorded local close', { accountId, bracketId: order.bracketId, cancelKey });
               continue;
             }
@@ -13334,7 +13381,7 @@ export function createApp(
               traderspostEnabled: true,
               status: 'pending_traderspost',
             });
-            void forwardToTradersPost(proxyDelivery, proxyAlert.payloadJson, {
+            eodReport.sends.push(forwardToTradersPost(proxyDelivery, proxyAlert.payloadJson, {
               source: 'eod_cancel',
               userId,
               rangeName: order.rangeName,
@@ -13343,16 +13390,18 @@ export function createApp(
                 recordBridgeGeneratedEntryCancelled(updatedDelivery, cancelPayload, now.toISOString());
                 lastEodRunDateByKey.set(cancelKey, currentDateKey);
                 console.info('[eod-scheduler] EOD cancel delivered', { accountId, bracketId: order.bracketId, cancelKey });
-              } else {
-                console.error('[eod-scheduler] EOD cancel not delivered; will retry', { accountId, bracketId: order.bracketId, status: updatedDelivery.status });
+                return true;
               }
+              console.error('[eod-scheduler] EOD cancel not delivered; will retry', { accountId, bracketId: order.bracketId, status: updatedDelivery.status });
+              return false;
             }).catch((error) => {
               console.error('[eod-scheduler] EOD cancel forward failed; will retry', {
                 accountId,
                 bracketId: order.bracketId,
                 error: error instanceof Error ? error.message : String(error),
               });
-            });
+              return false;
+            }));
           }
 
           // Instrument-scoped cancels for recently-active roots not covered by an open
@@ -13413,23 +13462,25 @@ export function createApp(
                 traderspostEnabled: true,
                 status: 'pending_traderspost',
               });
-              void forwardToTradersPost(proxyDelivery, proxyAlert.payloadJson, {
+              eodReport.sends.push(forwardToTradersPost(proxyDelivery, proxyAlert.payloadJson, {
                 source: 'eod_cancel',
                 userId,
               }).then((updatedDelivery) => {
                 if (updatedDelivery.status === 'traderspost_delivered' || updatedDelivery.status === 'extension_draft_created_and_traderspost_delivered') {
                   lastEodRunDateByKey.set(cancelKey, currentDateKey);
                   console.info('[eod-scheduler] EOD instrument cancel delivered', { accountId, ticker: cancelTicker, cancelKey });
-                } else {
-                  console.error('[eod-scheduler] EOD instrument cancel not delivered; will retry', { accountId, ticker: cancelTicker, status: updatedDelivery.status });
+                  return true;
                 }
+                console.error('[eod-scheduler] EOD instrument cancel not delivered; will retry', { accountId, ticker: cancelTicker, status: updatedDelivery.status });
+                return false;
               }).catch((error) => {
                 console.error('[eod-scheduler] EOD instrument cancel forward failed; will retry', {
                   accountId,
                   ticker: cancelTicker,
                   error: error instanceof Error ? error.message : String(error),
                 });
-              });
+                return false;
+              }));
             }
           }
         }
@@ -13444,6 +13495,7 @@ export function createApp(
             if (exitAttemptState?.date === currentDateKey && exitAttemptState.count >= MAX_EOD_RETRY_MINUTES) {
               const closed = recordFlattenedPositions(userId, accountId, instrument, now.toISOString(), undefined, 'eod');
               lastEodRunDateByKey.set(exitKey, currentDateKey);
+              eodReport.localCloses++;
               console.warn('[eod-scheduler] EOD exit retries exhausted; recorded local close', { accountId, instrument, closed, exitKey });
               continue;
             }
@@ -13464,6 +13516,7 @@ export function createApp(
             if (!eodCanSend) {
               const closed = recordFlattenedPositions(userId, accountId, instrument, now.toISOString(), undefined, 'eod');
               lastEodRunDateByKey.set(exitKey, currentDateKey);
+              eodReport.localCloses++;
               console.info('[eod-scheduler] Recorded local EOD exit (no TradersPost destination)', { accountId, instrument, closed, exitKey });
               continue;
             }
@@ -13472,6 +13525,7 @@ export function createApp(
             if (!routeId) {
               const closed = recordFlattenedPositions(userId, accountId, instrument, now.toISOString(), undefined, 'eod');
               lastEodRunDateByKey.set(exitKey, currentDateKey);
+              eodReport.localCloses++;
               console.warn('[eod-scheduler] EOD exit route missing; recorded local close', { accountId, instrument, closed, exitKey });
               continue;
             }
@@ -13491,7 +13545,7 @@ export function createApp(
               traderspostEnabled: true,
               status: 'pending_traderspost',
             });
-            void forwardToTradersPost(proxyDelivery, proxyAlert.payloadJson, {
+            eodReport.sends.push(forwardToTradersPost(proxyDelivery, proxyAlert.payloadJson, {
               source: 'eod_exit',
               userId,
             }).then((updatedDelivery) => {
@@ -13503,16 +13557,18 @@ export function createApp(
                   instrument,
                   closed,
                 });
-              } else {
-                console.error('[eod-scheduler] EOD exit not delivered; will retry', { accountId, instrument, status: updatedDelivery.status });
+                return true;
               }
+              console.error('[eod-scheduler] EOD exit not delivered; will retry', { accountId, instrument, status: updatedDelivery.status });
+              return false;
             }).catch((error) => {
               console.error('[eod-scheduler] EOD exit forward failed; will retry', {
                 accountId,
                 instrument: exitPayload.ticker,
                 error: error instanceof Error ? error.message : String(error),
               });
-            });
+              return false;
+            }));
           }
 
           // Instrument-scoped exits for recently-active roots with no open position —
@@ -13574,7 +13630,7 @@ export function createApp(
                 traderspostEnabled: true,
                 status: 'pending_traderspost',
               });
-              void forwardToTradersPost(proxyDelivery, proxyAlert.payloadJson, {
+              eodReport.sends.push(forwardToTradersPost(proxyDelivery, proxyAlert.payloadJson, {
                 source: 'eod_exit',
                 userId,
               }).then((updatedDelivery) => {
@@ -13582,18 +13638,38 @@ export function createApp(
                   const closed = recordFlattenedPositions(userId, accountId, exitTicker, now.toISOString(), proxyAlert.id, 'eod');
                   lastEodRunDateByKey.set(exitKey, currentDateKey);
                   console.info('[eod-scheduler] EOD instrument exit delivered', { accountId, ticker: exitTicker, closed, exitKey });
-                } else {
-                  console.error('[eod-scheduler] EOD instrument exit not delivered; will retry', { accountId, ticker: exitTicker, status: updatedDelivery.status });
+                  return true;
                 }
+                console.error('[eod-scheduler] EOD instrument exit not delivered; will retry', { accountId, ticker: exitTicker, status: updatedDelivery.status });
+                return false;
               }).catch((error) => {
                 console.error('[eod-scheduler] EOD instrument exit forward failed; will retry', {
                   accountId,
                   ticker: exitTicker,
                   error: error instanceof Error ? error.message : String(error),
                 });
-              });
+                return false;
+              }));
             }
           }
+        }
+
+        // One toast per account per day summarizing this EOD pass — success
+        // when every send delivered, warning when retries/local closes remain.
+        const eodToastKey = `eod:${accountId}`;
+        if ((eodReport.sends.length > 0 || eodReport.localCloses > 0) && eodToastByKey.get(eodToastKey) !== currentDateKey) {
+          eodToastByKey.set(eodToastKey, currentDateKey);
+          const localCloses = eodReport.localCloses;
+          void Promise.all(eodReport.sends).then((results) => {
+            const delivered = results.filter(Boolean).length;
+            const allOk = delivered === results.length && localCloses === 0;
+            emitToUser(userId, allOk ? 'toast:success' : 'toast:warning', {
+              persistent: true,
+              message: allOk
+                ? `EOD close-out complete for ${account.name} — ${delivered} flatten send${delivered === 1 ? '' : 's'} delivered`
+                : `EOD close-out for ${account.name}: ${delivered}/${results.length} sends delivered${localCloses > 0 ? `, ${localCloses} position(s) closed locally without a send` : ''} — check remaining positions`,
+            });
+          });
         }
 
         if (destination?.newsFlattenEnabled && destination?.newsFlattenMinutes) {
@@ -13620,6 +13696,14 @@ export function createApp(
                   // Disabled/deprecated destination or retries exhausted — close the
                   // books locally like EOD so the journal does not show brackets still
                   // live through the event window.
+                  const newsToastKey = `news:${accountId}:${nextEvent.eventId}`;
+                  if (newsToastByKey.get(newsToastKey) !== currentDateKey) {
+                    newsToastByKey.set(newsToastKey, currentDateKey);
+                    emitToUser(userId, 'toast:warning', {
+                      persistent: true,
+                      message: `News flatten for ${account.name} could not send (${!accountCanSend ? 'destination disabled' : 'retries exhausted'}) — positions closed locally only, verify the book is flat`,
+                    });
+                  }
                   for (const order of database.getOpenBracketOrdersForAccount(accountId)) {
                     recordBridgeGeneratedEntryCancelled({ userId, accountId }, {
                       ticker: order.ticker,
@@ -13791,6 +13875,18 @@ export function createApp(
                   void Promise.all(newsSends).then((results) => {
                     if (newsSends.length > 0 && results.every(Boolean)) {
                       lastNewsFlattenByEventKey.set(newsFlattenKey, currentDateKey);
+                    }
+                    const newsToastKey = `news:${accountId}:${nextEvent.eventId}`;
+                    if (newsSends.length > 0 && newsToastByKey.get(newsToastKey) !== currentDateKey) {
+                      newsToastByKey.set(newsToastKey, currentDateKey);
+                      const delivered = results.filter(Boolean).length;
+                      const allOk = delivered === results.length;
+                      emitToUser(userId, allOk ? 'toast:success' : 'toast:warning', {
+                        persistent: true,
+                        message: allOk
+                          ? `News flatten delivered for ${account.name} — ${delivered} send${delivered === 1 ? '' : 's'} before ${nextEvent.title}`
+                          : `News flatten for ${account.name}: ${delivered}/${results.length} sends delivered before ${nextEvent.title} — check remaining positions`,
+                      });
                     }
                   });
                 }

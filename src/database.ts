@@ -1192,6 +1192,7 @@ export class Database {
           exclusion_reason TEXT,
           excluded_by_user_id TEXT REFERENCES users(id),
           exclusion_updated_at TEXT,
+          exclusion_marker TEXT,
           adjustment_note TEXT,
           adjusted_at TEXT,
           adjusted_by_user_id TEXT,
@@ -1211,12 +1212,12 @@ export class Database {
           id, user_id, account_id, range_name, event_id, trade_id, event_type, instrument, side, action,
           quantity, entry_price, exit_price, realized_ticks_cents, realized_dollars_cents, outcome,
           occurred_at, proxy_alert_id, excluded_from_performance, exclusion_reason, excluded_by_user_id,
-          exclusion_updated_at, adjustment_note, adjusted_at, adjusted_by_user_id, adjusted_by_email
+          exclusion_updated_at, exclusion_marker, adjustment_note, adjusted_at, adjusted_by_user_id, adjusted_by_email
         )
         SELECT id, user_id, account_id, range_name, event_id, trade_id, event_type, instrument, side, action,
           quantity, entry_price, exit_price, realized_ticks_cents, realized_dollars_cents, outcome,
           occurred_at, proxy_alert_id, excluded_from_performance, exclusion_reason, excluded_by_user_id,
-          exclusion_updated_at, adjustment_note, adjusted_at, adjusted_by_user_id, adjusted_by_email
+          exclusion_updated_at, exclusion_marker, adjustment_note, adjusted_at, adjusted_by_user_id, adjusted_by_email
         FROM trade_events`,
       );
       this.db.exec('DROP TABLE trade_events');
