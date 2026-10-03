@@ -73,13 +73,22 @@ retires it. Per-range opt-out for A/B forward testing. Event: `crossTradeStopOnl
 
 ### 2d. Auto-retry of rejected entries + 10-min abort
 
-The sweep re-dispatches armed brackets whose newest CT entry ledger row is `rejected`,
+The sweep re-dispatches armed brackets whose newest CT entry ledger row is `rejected`
 resending the *original* payload (same stop level) on a fresh `-a<n>` wire id per the resend
 convention. Bounds: max 3 attempts, 10 minutes from the first dispatch — then the arm is
 aborted (`entry_cancelled`, `crossTradeRetryAborted`). Bridge-side stop-only blocks are never
 retried (deterministic, not transport failure). Ordering matters: retry runs **before** leg
 sync — a rejected arm looks identical to an orphaned arm and would be retired first.
 Events: `crossTradeEntryAutoRetry` / `crossTradeRetryAborted` / `crossTradeRetrySkipped`.
+
+OCO re-pair on retry: the fresh `-a<n>` wire id also mints a fresh `oco_id` group, which
+leaves a still-working sibling arm stranded in the old (already-resolved) group. When the
+sibling's arm is still `armed` with a working ledger row, the retry first cancels it
+(instrument-scoped `cancelorders` — the only wire cancel primitive), then resends it under
+the same `-a<n>` suffix so both arms share the new group. If another open bracket shares the
+instrument root the instrument-wide cancel isn't safe — the retry proceeds unpaired and a
+`crossTradeOcoUnpaired` warning + toast fires instead. `crossTradeOcoRepaired` logs the
+sibling resend.
 
 ### 3. Exit-leg price correction already present — extend to qty
 

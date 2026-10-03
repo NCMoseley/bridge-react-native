@@ -609,7 +609,7 @@ export function RangeDetailCard({
                   <th className="px-4 py-3">User</th>
                   <th className="px-4 py-3">Account</th>
                   <th className="hidden sm:table-cell px-4 py-3">Extension</th>
-                  <th className="hidden sm:table-cell px-4 py-3">TradersPost</th>
+                  <th className="hidden sm:table-cell px-4 py-3">Broker</th>
                   <th className="hidden sm:table-cell px-4 py-3">Created</th>
                 </tr>
               </thead>
@@ -626,7 +626,11 @@ export function RangeDetailCard({
                       {sub.extensionEnabled ? 'Enabled' : 'Disabled'}
                     </td>
                     <td className="hidden sm:table-cell px-4 py-3 text-slate-400">
-                      {sub.traderspostEnabled ? 'Enabled' : 'Disabled'}
+                      {sub.traderspostEnabled
+                        ? sub.crossTradeEnabled
+                          ? 'CrossTrade'
+                          : 'TradersPost'
+                        : 'Disabled'}
                     </td>
                     <td className="hidden sm:table-cell px-4 py-3 text-slate-400">
                       <JournalDate value={sub.createdAt} />

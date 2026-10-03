@@ -415,15 +415,16 @@ await armMonitor(`${pair}-long`, 'MNQ1!', 'SIM-CT-MNQ', 'long', 29520);
 await armMonitor(`${pair}-short`, 'MNQ1!', 'SIM-CT-MNQ', 'short', 29480);
 // Both base legs Working at the mock. Mark the LONG rejected in the ledger;
 // kill its mock leg — the sibling stays Working under the OLD oco group.
-db.prepare("UPDATE broker_orders SET status = 'rejected', error_text = 'rejected' WHERE bracket_id = ?").run(`${pair}-long`);
-await mockCmd({ command: 'cancel', account: 'Sim101', instrument: 'MNQ1!', order_id: `${pair}-long` }).catch(() => {});
+const pairLongRow = ledFor(`${pair}-long`)[0];
+db.prepare("UPDATE broker_orders SET status = 'rejected', error_text = 'rejected' WHERE id = ?").run(pairLongRow.id);
+await mockCmd({ command: 'cancel', account: 'Sim101', instrument: 'MNQ1!', order_id: pairLongRow.order_id }).catch(() => {});
 await sweep();
 const mnqLegs = (await mockState()).books
   ?.flatMap((b) => b.orders ?? [])
   .filter((o) => String(o.orderId ?? '').includes(pair) && o.state === 'Working');
 const pairOcos = new Set((mnqLegs ?? []).map((o) => o.ocoId));
 check('both retried arms working at mock', (mnqLegs ?? []).length === 2, mnqLegs?.map((o) => `${o.orderId}:${o.state}`));
-check('both arms share fresh -a1 oco group', pairOcos.size === 1 && [...pairOcos][0] === `${pair}-a1`, [...pairOcos]);
+check('both arms share fresh -a1 oco group', pairOcos.size === 1 && String([...pairOcos][0]).endsWith(`${pair}-a1`), [...pairOcos]);
 check('sibling re-pair logged', db.prepare("SELECT COUNT(*) n FROM bridge_logs WHERE data_json LIKE ?").get(`%"crossTradeOcoRepaired"%${pair}%`).n > 0);
 
 // --- Phase 17: stop-only control — limit on a normal range still dispatches ---
@@ -457,7 +458,89 @@ check('phantom exclusion cleared by real exit', phCloseAfter?.excluded_from_perf
 check('exit repriced to broker fill', phCloseAfter?.exit_price === 29545, phCloseAfter?.exit_price);
 check('broker upgrade logged', db.prepare("SELECT COUNT(*) n FROM bridge_logs WHERE data_json LIKE ?").get(`%"crossTradeBrokerRealizationUpgrade"%`).n > 0);
 
-// --- Phase 19: negative controls — no warnings where state is consistent ---
+// --- Phase 19: retry snapshot fidelity — config flips must not drift the retry ---
+console.log('\n=== retry snapshot: policy applied at dispatch survives config flips ===');
+// Retire any lingering open MNQ monitors so the re-pair guard sees a clean book.
+db.prepare("UPDATE bracket_monitor SET state = 'cancelled' WHERE account_id = ? AND instrument = 'MNQ1!' AND state IN ('armed','filled')").run(ctAccount.id);
+await mockCmd({ command: 'cancelorders', account: 'Sim101', instrument: 'MNQ1!' });
+const snapArm = `e2e-snap-${TAG}`;
+await armMonitor(snapArm, 'MNQ1!', 'SIM-CT-MNQ', 'long', 29525);
+const snapRow = ledFor(snapArm)[0];
+db.prepare("UPDATE broker_orders SET status = 'rejected', error_text = 'rejected' WHERE id = ?").run(snapRow.id);
+// Flip policy AFTER the original dispatch: BE on (would attach atm_strategy)
+// and oco 'both' (would drop oco_id). A naive rebuild would drift; the
+// snapshot must preserve what the first send looked like.
+db.prepare("UPDATE range_configurations SET break_even_enabled = 1, oco_mode = 'both' WHERE range_name = ?").run('SIM-CT-MNQ');
+await sweep();
+const snapCalls = (await (await fetch(`${BASE}/mock/crosstrade/calls`)).json()).calls;
+const snapCall = snapCalls.filter((c) => String(c.payload?.order_id ?? '').includes(`${snapArm}-a`)).at(-1);
+check('retry place sent after config flip', Boolean(snapCall), snapCall?.payload?.order_id);
+check('retry keeps snapshot oco (not both-mode)', typeof snapCall?.payload?.oco_id === 'string' && snapCall.payload.oco_id.endsWith('-a1'), snapCall?.payload?.oco_id);
+// The retry must be the ORIGINAL send verbatim modulo the -aN wire suffix —
+// flipping oco/breakeven config post-rejection must not drift the payload.
+const origCall = snapCalls.find((c) => String(c.payload?.order_id ?? '') === snapRow.order_id);
+const strip = (c) => c ? { ...c.payload,
+  order_id: String(c.payload.order_id).replace(/-a\d+$/, ''),
+  oco_id: String(c.payload.oco_id ?? '').replace(/-a\d+$/, ''),
+  notes: String(c.payload.notes ?? '').replace(/^src:[^ ]+/, 'src:*').replace(/-a\d+/g, ''),
+} : undefined;
+check('retry payload identical to original send', origCall && JSON.stringify(strip(snapCall)) === JSON.stringify(strip(origCall)),
+  JSON.stringify([strip(origCall), strip(snapCall)]));
+db.prepare("UPDATE range_configurations SET break_even_enabled = 0, oco_mode = 'oco' WHERE range_name = ?").run('SIM-CT-MNQ');
+
+// --- Phase 20: uncertain sibling is re-paired too ---
+console.log('\n=== uncertain sibling: re-pair treats it as potentially live ===');
+db.prepare("UPDATE bracket_monitor SET state = 'cancelled' WHERE account_id = ? AND instrument = 'MNQ1!' AND state IN ('armed','filled')").run(ctAccount.id);
+await mockCmd({ command: 'cancelorders', account: 'Sim101', instrument: 'MNQ1!' });
+const uPair = `e2e-upair-${TAG}`;
+await armMonitor(`${uPair}-long`, 'MNQ1!', 'SIM-CT-MNQ', 'long', 29530);
+await armMonitor(`${uPair}-short`, 'MNQ1!', 'SIM-CT-MNQ', 'short', 29480);
+db.prepare("UPDATE broker_orders SET status = 'rejected', error_text = 'rejected' WHERE bracket_id = ?").run(`SIM--CT--MNQ-${uPair}-long`);
+// Sibling's ledger row is uncertain — a send that may have reached NT8. The
+// re-pair must still treat it as working (cancel + resend), not skip it.
+db.prepare("UPDATE broker_orders SET status = 'uncertain', error_text = 'timeout' WHERE bracket_id = ?").run(`SIM--CT--MNQ-${uPair}-short`);
+await sweep();
+const uLegs = (await mockState()).books?.flatMap((b) => b.orders ?? [])
+  .filter((o) => String(o.orderId ?? '').includes(uPair) && o.state === 'Working');
+const uOcos = new Set((uLegs ?? []).map((o) => o.ocoId));
+check('uncertain sibling re-paired to -a1', (uLegs ?? []).length === 2 && uOcos.size === 1, uLegs?.map((o) => `${o.orderId}:${o.ocoId}`));
+check('re-pair logged for uncertain sibling', db.prepare("SELECT COUNT(*) n FROM bridge_logs WHERE data_json LIKE ?").get(`%"crossTradeOcoRepaired"%${uPair}%`).n > 0);
+
+// --- Phase 21: unattributed-leg validation — wrong-price manual leg must not count ---
+console.log('\n=== leg validation: ownerless leg must match configured SL/TP to count ===');
+const legArm = `e2e-legbad-${TAG}`;
+await armMonitor(legArm, 'MGC1!', 'SIM-CT-MGC', 'long', 2400);
+const legRow = ledFor(legArm)[0];
+// Fill the entry at the mock; monitor goes 'filled' on adoption.
+await fetch(`${BASE}/mock/crosstrade/fill`, {
+  method: 'POST', headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ account: 'Sim101', orderId: legRow.order_id }),
+});
+// Ownerless manual stop at the WRONG distance (expected 20 ticks = 2.0 →
+// 2398.0; place 2395.0, ~30 ticks off) must not count as protection.
+await mockCmd({ command: 'place', account: 'Sim101', instrument: 'MGC1!', action: 'sell', order_type: 'stopmarket', stop_price: 2395.0, qty: 1, order_id: `${legArm}-manualstop` });
+await sweep(); await sweep();
+const legMissing = db.prepare("SELECT COUNT(*) n FROM bridge_logs WHERE data_json LIKE ? AND data_json LIKE ?").get('%crossTradeAtmMissing%', `%${legArm}%`);
+check('wrong-price ownerless leg does not suppress missing-ATM warning', legMissing.n > 0);
+// Same scenario but the ownerless leg sits at the expected SL distance —
+// now it plausibly IS the protection, no warning for this bracket.
+const legArm2 = `e2e-leggood-${TAG}`;
+await armMonitor(legArm2, 'MGC1!', 'SIM-CT-MGC', 'long', 2400);
+const legRow2 = ledFor(legArm2)[0];
+await fetch(`${BASE}/mock/crosstrade/fill`, {
+  method: 'POST', headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ account: 'Sim101', orderId: legRow2.order_id }),
+});
+await mockCmd({ command: 'place', account: 'Sim101', instrument: 'MGC1!', action: 'sell', order_type: 'stopmarket', stop_price: 2398.0, qty: 1, order_id: `${legArm2}-goodstop` });
+await sweep(); await sweep();
+{
+  const mgcOrders = (await mockState()).books?.flatMap((b) => b.orders ?? []).filter((o) => o.instrument === 'MGC1!');
+  console.log('  [diag] MGC legs:', JSON.stringify(mgcOrders?.map((o) => ({ id: o.orderId, st: o.state, sp: o.stopPrice, lp: o.limitPrice, own: o.atmStrategy }))));
+}
+const legMissing2 = db.prepare("SELECT COUNT(*) n FROM bridge_logs WHERE data_json LIKE ? AND data_json LIKE ?").get('%crossTradeAtmMissing%', `%${legArm2}%`);
+check('expected-price ownerless leg counts as protection (no warning)', legMissing2.n === 0, legMissing2);
+
+// --- Phase 22: negative controls — no warnings where state is consistent ---
 console.log('\n=== negative controls: claimed roots / armed brackets stay quiet ===');
 // MGC1! position is claimed by the PartFilled bracket (monitor filled) — the
 // orphan check must not fire for a root an open bracket owns.

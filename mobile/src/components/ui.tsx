@@ -161,6 +161,7 @@ export function Input({
   keyboardType,
   secureTextEntry,
   multiline,
+  numberOfLines,
   style,
 }: {
   value: string
@@ -169,6 +170,7 @@ export function Input({
   keyboardType?: 'default' | 'numeric' | 'decimal-pad' | 'email-address'
   secureTextEntry?: boolean
   multiline?: boolean
+  numberOfLines?: number
   style?: StyleProp<TextStyle>
 }) {
   return (
@@ -180,6 +182,7 @@ export function Input({
       keyboardType={keyboardType}
       secureTextEntry={secureTextEntry}
       multiline={multiline}
+      numberOfLines={numberOfLines}
       autoCapitalize="none"
       autoCorrect={false}
       style={[styles.input, multiline && { minHeight: 70, textAlignVertical: 'top' }, style]}
@@ -226,7 +229,7 @@ export function SegmentedPicker<T extends string | number>({
   value,
   onChange,
 }: {
-  options: Array<{ value: T; label: string }>
+  options: { value: T; label: string }[]
   value: T
   onChange: (v: T) => void
 }) {
@@ -262,7 +265,7 @@ export function SelectPicker<T extends string | number>({
   onChange,
 }: {
   label?: string
-  options: Array<{ value: T; label: string }>
+  options: { value: T; label: string }[]
   value: T
   onChange: (v: T) => void
 }) {

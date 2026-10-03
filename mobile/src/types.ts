@@ -299,8 +299,7 @@ export interface TradeCalendarMonthView {
   days: CalendarDay[]
   /** Prior-month days that fill the grid's leading cells — display only,
       never counted in `summary`. */
-  trailingDays?: Array<
-    Pick<
+  trailingDays?: Pick<
       CalendarDay,
       | 'date'
       | 'realizedDollarsCents'
@@ -310,8 +309,7 @@ export interface TradeCalendarMonthView {
       | 'losses'
       | 'breakevens'
       | 'winRate'
-    >
-  >
+    >[]
   summary: JournalMetrics
 }
 
@@ -541,4 +539,14 @@ export interface SettingsData {
   rangeSubcategoryAssignments: RangeSubcategoryAssignment[]
   extensionToken: string
   extensionVersion: string
+}
+
+export interface RangeAlert {
+  alertId: string
+  receivedAt: string
+  rangeName?: string
+  action: 'buy' | 'sell' | 'cancel' | 'exit'
+  ticker: string
+  payloadJson: string
+  sourceReference?: string
 }

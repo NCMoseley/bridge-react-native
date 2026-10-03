@@ -246,7 +246,7 @@ function AccountCard({
                 instruments: string[]
                 sent: number
                 errors: number
-                results: Array<{ instrument: string; ok: boolean; status?: number; error?: string }>
+                results: { instrument: string; ok: boolean; status?: number; error?: string }[]
               }
               if (data.sent === 0) {
                 success(`No buy/sell alerts found for ${account.name} in the last 24 hours`)
@@ -405,7 +405,7 @@ function AccountCard({
 
       <View style={styles.divider} />
       <Text style={styles.sectionTitle}>Account config</Text>
-      <Text style={[styles.dim, { marginBottom: 8 }]}>Manage this account's order dispatch destination.</Text>
+      <Text style={[styles.dim, { marginBottom: 8 }]}>Manage this account&rsquo;s order dispatch destination.</Text>
 
       <Text style={styles.fieldLabel}>Dispatch destination</Text>
       <View style={styles.modeRow}>

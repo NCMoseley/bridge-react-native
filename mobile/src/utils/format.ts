@@ -138,7 +138,7 @@ export function calendarMonthLabel(monthKey: string): string {
 }
 
 export function journalActiveDays(calendar: {
-  days: Array<{ closedCount: number }>
+  days: { closedCount: number }[]
 }): number {
   return calendar.days.filter((day) => day.closedCount > 0).length
 }

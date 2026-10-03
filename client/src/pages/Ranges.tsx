@@ -433,6 +433,7 @@ function RangeCategorySection({
   category,
   ranges,
   assignments,
+  subcategories,
   open,
   onToggle,
   onBulkDays,
@@ -443,6 +444,7 @@ function RangeCategorySection({
   category: string
   ranges: SharedRangeDetail[]
   assignments: RangeSubcategoryAssignment[]
+  subcategories: RangeSubcategory[]
   open: boolean
   onToggle: (anchor?: HTMLElement) => void
   onBulkDays: (enabled: boolean) => void
@@ -536,6 +538,10 @@ function RangeCategorySection({
       >
         <div>
           <div className="flex flex-wrap items-center gap-3">
+            <span
+              className="h-4 w-4 flex-none rounded-full"
+              style={{ backgroundColor: modelColor(category, subcategories) }}
+            />
             <h2 className="text-xl font-bold uppercase tracking-wide text-slate-100 transition-colors group-hover:text-indigo-400">
               {category}
             </h2>
@@ -739,8 +745,11 @@ export function SubscriptionBadges({
             </span>
           )}
           {sub.traderspostEnabled && (
-            <span className="rounded bg-positive-900 px-1 text-[10px] text-positive-100">
-              TP
+            <span
+              className="rounded bg-positive-900 px-1 text-[10px] text-positive-100"
+              title={sub.crossTradeEnabled ? 'CrossTrade routing' : 'TradersPost routing'}
+            >
+              {sub.crossTradeEnabled ? 'CT' : 'TP'}
             </span>
           )}
         </span>
@@ -804,11 +813,6 @@ function UpcomingRangeCard({
           <span className="truncate font-bold text-slate-100 hover:text-indigo-400">
             {schedule.rangeName}
           </span>
-          {instrument && (
-            <span className="flex-none rounded border border-slate-600 bg-slate-950 px-1.5 py-0.5 text-[10px] font-bold text-slate-300">
-              {instrument}
-            </span>
-          )}
         </button>
 
         <div className="text-sm text-slate-300">
@@ -2046,7 +2050,23 @@ export function RangesPage() {
       })
   }
 
+  const colorSaveTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
+  useEffect(() => () => { for (const t of colorSaveTimers.current.values()) clearTimeout(t) }, [])
   const handleSetSubcategoryColor = (name: string, color: string | null) => {
+    // The native color input fires onChange on every drag tick — debounce so a
+    // drag produces one save at the end instead of a request per pixel.
+    const existing = colorSaveTimers.current.get(name)
+    if (existing) clearTimeout(existing)
+    if (color === null) {
+      saveSubcategoryColor(name, null)
+      return
+    }
+    colorSaveTimers.current.set(name, setTimeout(() => {
+      colorSaveTimers.current.delete(name)
+      saveSubcategoryColor(name, color)
+    }, 600))
+  }
+  const saveSubcategoryColor = (name: string, color: string | null) => {
     postForm('/range-subcategories/color', { name, color: color ?? '' })
       .then(() => {
         refresh()
@@ -2344,6 +2364,7 @@ export function RangesPage() {
             category={category}
             ranges={ranges}
             assignments={assignments}
+            subcategories={subcategories}
             open={openCategory === category}
             onToggle={(anchor) => toggleRangeCategory(category, anchor)}
             onBulkDays={(enabled) => handleBulkDays(category, enabled)}
@@ -2361,7 +2382,13 @@ export function RangesPage() {
                     key={range.rangeName}
                     className="flex flex-wrap items-center gap-2 px-3 py-2"
                   >
-                    <span className="font-semibold text-slate-100">{range.rangeName}</span>
+                    <Link
+                      to={`/app/ranges/calendar?range=${encodeURIComponent(range.rangeName)}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="font-semibold text-slate-100 transition-colors hover:text-indigo-400"
+                    >
+                      {range.rangeName}
+                    </Link>
                     <SubscriptionChip range={range} />
                     <span className="flex items-center gap-1">
                       <ModelDayButtons

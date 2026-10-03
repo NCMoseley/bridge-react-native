@@ -8,9 +8,12 @@ import {
   formatPnl,
   formatTicks,
   JOURNAL_TIME_ZONE,
-} from '../utils/format'
+ formatJournalDate } from '../utils/format'
 import type { AccountJournal, CalendarDay, JournalMetrics, TradeStats } from '../types'
 import { colors, pnlColor, RingChart, toneForCents } from './ui'
+
+// ---- JournalDate ----
+
 
 // ---- DailyCumulativeChart ----
 
@@ -175,11 +178,11 @@ const EQUITY_WINDOWS = [7, 14, 30, 90] as const
 
 export function EquityChart({ label, query }: { label: string; query: string }) {
   const [windowDays, setWindowDays] = useState<number>(30)
-  const [days, setDays] = useState<Array<{ date: string; realizedDollarsCents: number }>>([])
+  const [days, setDays] = useState<{ date: string; realizedDollarsCents: number }[]>([])
   useEffect(() => {
     let cancelled = false
     setDays([])
-    getJson<{ days: Array<{ date: string; realizedDollarsCents: number }> }>(
+    getJson<{ days: { date: string; realizedDollarsCents: number }[] }>(
       `/api/model-equity?${query}&days=${windowDays}`,
     )
       .then((res) => {
@@ -215,7 +218,7 @@ export function ModelEquityChart({
   windowDays,
   windowSelector,
 }: {
-  days: Array<{ date: string; realizedDollarsCents: number }>
+  days: { date: string; realizedDollarsCents: number }[]
   model: string
   windowDays: number
   windowSelector?: React.ReactNode
@@ -317,11 +320,11 @@ function statCell(stats: TradeStats | undefined, key: keyof TradeStats): string 
   return String(v)
 }
 
-const PERF_COLUMNS: Array<{
+const PERF_COLUMNS: {
   label: string
   render: (aj: AccountJournal) => string
   tone?: (aj: AccountJournal) => string | undefined
-}> = [
+}[] = [
   { label: 'Trades', render: (aj) => String(aj.allTime.closedCount) },
   { label: 'Win %', render: (aj) => (aj.allTime.winRate != null ? formatPercent(aj.allTime.winRate) : '—') },
   { label: 'Profit factor', render: (aj) => statCell(aj.stats, 'profitFactor') },
@@ -368,10 +371,6 @@ export function AccountPerformanceChart({ accounts }: { accounts: AccountJournal
     </ScrollView>
   )
 }
-
-// ---- JournalDate ----
-
-import { formatJournalDate } from '../utils/format'
 
 export function JournalDate({ value }: { value: string }) {
   const formatted = formatJournalDate(value)

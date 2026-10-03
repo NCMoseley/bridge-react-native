@@ -156,7 +156,7 @@ export function DebuggingContent({ monitoringOnly = false }: { monitoringOnly?: 
   const [orderPage, setOrderPage] = useState(0)
   const [runsPage, setRunsPage] = useState(0)
   const [emailOpenId, setEmailOpenId] = useState<string | null>(null)
-  const [emails, setEmails] = useState<Array<Record<string, unknown> & { id: string }>>([])
+  const [emails, setEmails] = useState<(Record<string, unknown> & { id: string })[]>([])
   const [emailHours, setEmailHours] = useState(4)
 
   const accounts = data?.accounts ?? []
@@ -264,7 +264,7 @@ export function DebuggingContent({ monitoringOnly = false }: { monitoringOnly?: 
 
   const fetchBridgeLogs = useCallback(() => {
     setLogsLoading(true)
-    getJson<{ logs: Array<{ id: string; category: string; timestamp: string; data: Record<string, unknown> }> }>(
+    getJson<{ logs: { id: string; category: string; timestamp: string; data: Record<string, unknown> }[] }>(
       `/api/bridge-logs?hours=${historyHours}&category=${historyCategory}`,
     )
       .then((res) => {
@@ -288,7 +288,7 @@ export function DebuggingContent({ monitoringOnly = false }: { monitoringOnly?: 
   }, [fetchBridgeLogs])
 
   const fetchEmails = useCallback(() => {
-    getJson<{ logs: Array<{ id: string; category: string; timestamp: string; data: Record<string, unknown> }> }>(
+    getJson<{ logs: { id: string; category: string; timestamp: string; data: Record<string, unknown> }[] }>(
       `/api/bridge-logs?hours=${emailHours}&category=email`,
     )
       .then((res) => {
@@ -712,7 +712,7 @@ export function DebuggingContent({ monitoringOnly = false }: { monitoringOnly?: 
 
           <Card title="CrossTrade API test">
             <Text style={styles.dim}>
-              Send a manual order to an account's configured CrossTrade endpoint — or the OCO pair action to send both arms of a range sharing one oco_id.
+              Send a manual order to an account&rsquo;s configured CrossTrade endpoint — or the OCO pair action to send both arms of a range sharing one oco_id.
             </Text>
             <SelectPicker
               label="Account"
@@ -916,7 +916,7 @@ export function DebuggingContent({ monitoringOnly = false }: { monitoringOnly?: 
                     })
                     const result = (await res.json()) as Record<string, unknown>
                     setCtResult(result)
-                    const legs = (result.legs as Array<{ success?: boolean }> | undefined) ?? [result]
+                    const legs = (result.legs as { success?: boolean }[] | undefined) ?? [result]
                     if (legs.every((leg) => leg.success === true)) success('CrossTrade order accepted')
                     else error('CrossTrade order was not fully accepted — see result')
                   } catch (err) {
@@ -983,7 +983,7 @@ export function DebuggingContent({ monitoringOnly = false }: { monitoringOnly?: 
                       const res = await postJson('/debugging/reconcile-crosstrade', { accountId: ctStateAccount })
                       const result = (await res.json()) as Record<string, unknown>
                       setCtReconcileResult(result)
-                      const outcomes = (result.outcomes as Array<{ outcome?: string }> | undefined) ?? []
+                      const outcomes = (result.outcomes as { outcome?: string }[] | undefined) ?? []
                       const resolved = outcomes.filter((o) => o.outcome !== 'unknown' && o.outcome !== 'in_flight').length
                       success(`Probed ${String(result.probed)} unresolved dispatch(es) — ${resolved} resolved by NT8 evidence`)
                     } catch (err) {

@@ -206,9 +206,15 @@ export function JournalPage() {
     // broker-verified state — adoption, orphan retirement, ghost resolution —
     // not just a re-read of local bookkeeping. Viewers get the local refresh.
     if (user?.isAdmin) {
-      postJson('/debugging/ct-sweep-now', {})
-        .catch(() => undefined)
-        .finally(finish)
+      const sweepDone = postJson('/debugging/ct-sweep-now', {}).catch(() => undefined)
+      // A full CT sweep can take 30s+ across accounts — don't hold the spinner
+      // hostage. Paint the local refresh now, and when the sweep lands later
+      // re-read once so broker-verified rows appear without another click.
+      Promise.race([sweepDone, new Promise((r) => setTimeout(r, 20_000))])
+        .finally(() => {
+          finish()
+          void sweepDone.then((r) => { if (r !== undefined) setRefreshKey((k) => k + 1) })
+        })
     } else {
       finish()
     }

@@ -13663,6 +13663,10 @@ export function createApp(
           void Promise.all(eodReport.sends).then((results) => {
             const delivered = results.filter(Boolean).length;
             const allOk = delivered === results.length && localCloses === 0;
+            database.createBridgeLog(userId, 'traderspost', {
+              event: 'eodCloseout', accountId, accountName: account.name,
+              delivered, attempted: results.length, localCloses, success: allOk,
+            });
             emitToUser(userId, allOk ? 'toast:success' : 'toast:warning', {
               persistent: true,
               message: allOk
@@ -13699,6 +13703,11 @@ export function createApp(
                   const newsToastKey = `news:${accountId}:${nextEvent.eventId}`;
                   if (newsToastByKey.get(newsToastKey) !== currentDateKey) {
                     newsToastByKey.set(newsToastKey, currentDateKey);
+                    database.createBridgeLog(userId, 'crosstrade', {
+                      event: 'newsFlatten', accountId, accountName: account.name,
+                      eventTitle: nextEvent.title, sent: false,
+                      reason: !accountCanSend ? 'destination disabled' : 'retries exhausted',
+                    });
                     emitToUser(userId, 'toast:warning', {
                       persistent: true,
                       message: `News flatten for ${account.name} could not send (${!accountCanSend ? 'destination disabled' : 'retries exhausted'}) — positions closed locally only, verify the book is flat`,
@@ -13881,6 +13890,11 @@ export function createApp(
                       newsToastByKey.set(newsToastKey, currentDateKey);
                       const delivered = results.filter(Boolean).length;
                       const allOk = delivered === results.length;
+                      database.createBridgeLog(userId, 'crosstrade', {
+                        event: 'newsFlatten', accountId, accountName: account.name,
+                        eventTitle: nextEvent.title, eventId: nextEvent.eventId,
+                        delivered, attempted: results.length, success: allOk,
+                      });
                       emitToUser(userId, allOk ? 'toast:success' : 'toast:warning', {
                         persistent: true,
                         message: allOk

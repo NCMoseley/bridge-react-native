@@ -2,7 +2,7 @@ export function tradingViewInstrumentIconUrl(
   instrument: string | undefined,
 ): string {
   const normalized = instrument?.trim().toUpperCase() ?? ''
-  const iconMap: Array<[RegExp, string]> = [
+  const iconMap: [RegExp, string][] = [
     [/^NQ/, 'https://s3-symbol-logo.tradingview.com/indices/nasdaq-100.svg'],
     [/^MNQ/, 'https://s3-symbol-logo.tradingview.com/country/US.svg'],
     [/^ES/, 'https://s3-symbol-logo.tradingview.com/indices/s-and-p-500.svg'],

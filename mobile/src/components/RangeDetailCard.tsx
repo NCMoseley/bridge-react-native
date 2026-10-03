@@ -62,7 +62,7 @@ function formatCents(cents: number | undefined): string {
   return cents === undefined ? '' : (cents / 100).toFixed(2)
 }
 
-const DAYS: Array<{ label: string; key: keyof RangeConfiguration }> = [
+const DAYS: { label: string; key: keyof RangeConfiguration }[] = [
   { label: 'Mon', key: 'runMonday' },
   { label: 'Tue', key: 'runTuesday' },
   { label: 'Wed', key: 'runWednesday' },
@@ -151,7 +151,7 @@ export function RangeDetailCard({
       <Section title="Models">
         {!compact ? (
           <Text style={[styles.dim, { marginBottom: 6 }]}>
-            A range can belong to several models. Accounts routed through a model follow that model's per-range run days.
+            A range can belong to several models. Accounts routed through a model follow that model&rsquo;s per-range run days.
           </Text>
         ) : null}
         <View style={styles.chipRow}>
@@ -200,7 +200,7 @@ export function RangeDetailCard({
 
       <Section title="Days of the week to run">
         <Text style={[styles.dim, { marginBottom: 6 }]}>
-          These are the days that this range will be included in the schedule. When an account is subscribed with "Only Scheduled", it will only take trades on these days.
+          These are the days that this range will be included in the schedule. When an account is subscribed with &quot;Only Scheduled&quot;, it will only take trades on these days.
         </Text>
         <View style={styles.chipRow}>
           {DAYS.map(({ label, key }) => {
@@ -239,7 +239,7 @@ export function RangeDetailCard({
                 ['Crossed-level entries', configuration.stopOnlyEntries ? 'Blocked' : 'Allowed'],
                 ['Entries per range', String(configuration.entriesPerRange)],
                 ['Description', configuration.description],
-              ] as Array<[string, string | undefined]>
+              ] as [string, string | undefined][]
             ).map(([label, value]) => (
               <View key={label} style={styles.settingRow}>
                 <Text style={styles.dim}>{label}</Text>

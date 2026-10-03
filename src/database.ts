@@ -3752,6 +3752,7 @@ export class Database {
       modelNames?: string[];
       extensionEnabled: boolean;
       traderspostEnabled: boolean;
+      crossTradeEnabled: boolean;
       createdAt: string;
       updatedAt: string;
     }>;
@@ -3799,6 +3800,20 @@ export class Database {
         created_at: string;
         updated_at: string;
       }>;
+    const ctConfiguredByAccount = new Map<string, boolean>();
+    for (const row of this.db.prepare(
+      'SELECT account_id, cross_trade_webhook_url, cross_trade_secret_key, cross_trade_enabled FROM traderspost_account_destinations',
+    ).all() as Array<{
+      account_id: string;
+      cross_trade_webhook_url: string | null;
+      cross_trade_secret_key: string | null;
+      cross_trade_enabled: number | null;
+    }>) {
+      ctConfiguredByAccount.set(
+        row.account_id,
+        Boolean(row.cross_trade_webhook_url && row.cross_trade_secret_key && row.cross_trade_enabled !== 0),
+      );
+    }
     const subcategoryAssignments = this.listRangeSubcategoryAssignments();
     // A range can live in several models — map to a set, not a single name.
     const rangeToSubcategories = new Map<string, Set<string>>();
@@ -3849,6 +3864,7 @@ export class Database {
       modelNames?: string[];
       extensionEnabled: boolean;
       traderspostEnabled: boolean;
+      crossTradeEnabled: boolean;
       createdAt: string;
       updatedAt: string;
     }>>();
@@ -3877,6 +3893,7 @@ export class Database {
         modelNames,
         extensionEnabled: Boolean(row.extension_enabled),
         traderspostEnabled: Boolean(row.traderspost_enabled),
+        crossTradeEnabled: ctConfiguredByAccount.get(row.account_id) ?? false,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
       });
@@ -3904,6 +3921,7 @@ export class Database {
         modelName?: string;
         extensionEnabled: boolean;
         traderspostEnabled: boolean;
+        crossTradeEnabled: boolean;
         createdAt: string;
         updatedAt: string;
       }>;

@@ -185,7 +185,7 @@ type SubcategoryDayKey =
   | 'runMonday' | 'runTuesday' | 'runWednesday' | 'runThursday'
   | 'runFriday' | 'runSaturday' | 'runSunday'
 
-const MODEL_DAY_KEYS: Array<{ label: string; key: SubcategoryDayKey }> = [
+const MODEL_DAY_KEYS: { label: string; key: SubcategoryDayKey }[] = [
   { label: 'Mon', key: 'runMonday' },
   { label: 'Tue', key: 'runTuesday' },
   { label: 'Wed', key: 'runWednesday' },
