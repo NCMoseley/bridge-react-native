@@ -1,3 +1,35 @@
+export type DraftStatus = 'pending' | 'reviewed' | 'submitted' | 'rejected' | 'expired'
+
+export interface OrderDraft {
+  id: string
+  userId: string
+  idempotencyKey: string
+  status: DraftStatus
+  ticker: string
+  action: 'buy' | 'sell' | 'cancel'
+  sentiment?: 'long' | 'short' | 'flat'
+  quantity: number
+  orderType: 'market' | 'limit' | 'stop' | 'stop_limit' | 'cancel'
+  signalPrice?: number
+  limitPrice?: number
+  stopPrice?: number
+  takeProfit?: Record<string, number>
+  stopLoss?: Record<string, string | number>
+  strategyStopPrice?: number
+  strategyStopMode?: 'close_confirmed' | 'intrabar'
+  bracketId?: string
+  bracketSide?: 'long' | 'short'
+  rangeName?: string
+  orderLeg?: string
+  cancellationMessage?: string
+  extensionEligible?: boolean
+  accountId?: string
+  accountName?: string
+  receivedAt: string
+  reviewedAt?: string
+  submittedAt?: string
+}
+
 export interface BridgeAccount {
   id: string
   userId: string
@@ -7,6 +39,18 @@ export interface BridgeAccount {
   externalBalanceAt?: string
   deprecated: boolean
   createdAt: string
+}
+
+export interface RangeRoute {
+  id: string
+  rangeName: string
+  userId: string
+  accountId: string
+  extensionEnabled: boolean
+  traderspostEnabled: boolean
+  runScheduled: boolean
+  createdAt: string
+  updatedAt: string
 }
 
 export interface JournalMetrics {
@@ -21,6 +65,8 @@ export interface JournalMetrics {
   averageLossDollarsCents: number | null
   averageWinTicksCents: number | null
   averageLossTicksCents: number | null
+  // Σ(realized ÷ range risk) over trades whose range declares risk; null when
+  // no covered trades — only populated on journal-summary paths.
   rEarned?: number | null
 }
 
@@ -62,12 +108,102 @@ export interface TradersPostAccountDestination {
   accountId: string
   webhookUrl: string
   enabled: boolean
-  crossTradeWebhookUrl?: string
-  crossTradeAccountName?: string
-  crossTradeEnabled?: boolean
-  eodEnabled?: boolean
+  outboundTicker?: string
+  outboundTickerMode?: 'none' | 'exact' | 'micros_only'
+  useLimitPriceTP?: boolean
+  useAlertTP?: boolean
+  reapplyOnTradeCloseEnabled?: boolean
+  eodCancelTime?: string
   eodExitTime?: string
+  eodEnabled?: boolean
+  newsFlattenEnabled?: boolean
+  newsFlattenMinutes?: number
+  crossTradeWebhookUrl?: string
+  // Write-only outbound field — the API never returns the stored key, it only
+  // reports whether one is saved (crossTradeSecretKeySet).
+  crossTradeSecretKey?: string
+  crossTradeSecretKeySet?: boolean
+  crossTradeAccountName?: string
+  // false = CT config parked (preserved, but dispatches go via TradersPost)
+  crossTradeEnabled?: boolean
+  quantityOverrideMode?: 'percent' | 'fixed' | 'risk'
+  quantityOverrideValue?: number
   updatedAt: string
+}
+
+export interface RangeReviewFlag {
+  rangeName: string
+  reason: 'test_data' | 'erroneous'
+  flaggedByUserId: string
+  flaggedByEmail: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface UntrackedRange {
+  name: string
+  alertCount: number
+  latestInstrument: string
+  latestReceivedAt: string
+}
+
+export interface ReapplyOperationSummary {
+  id: string
+  accountId: string
+  instrument: string
+  closingRangeName: string
+  createdAt: string
+  completed: boolean
+  reason?: string
+  rearmedRangeNames: string[]
+}
+
+export interface ProcessRun {
+  id: string
+  startedAt: string
+  endedAt?: string
+  cleanExit: boolean
+  exitCode?: number
+  fatal?: { event: string; name?: string; message?: string; stack?: string }
+  lastHeartbeatAt?: string
+  rssBytes?: number
+  heapUsedBytes?: number
+  eventLoopLagMs?: number
+  nodeVersion: string
+  pid: number
+}
+
+export type BrokerOrderAction = 'buy' | 'sell' | 'cancel' | 'exit'
+
+export type BrokerOrderState = 'pending' | 'acknowledged' | 'rejected' | 'uncertain' | 'filled' | 'closed' | 'cancelled'
+
+export interface BrokerOrder {
+  id: string
+  accountId: string
+  accountName?: string
+  rangeName: string
+  bracketId?: string
+  orderId: string
+  action: BrokerOrderAction
+  status: BrokerOrderState
+  dispatchStatus?: BrokerOrderState
+  statusSource?: 'dispatch' | 'lifecycle' | 'bridge' | 'operator' | 'email' | 'ct-verified' | 'legacy'
+  destination?: 'traderspost' | 'crosstrade'
+  instrument: string
+  side?: 'long' | 'short'
+  quantity?: number
+  price?: number
+  stopPrice?: number
+  limitPrice?: number
+  proxyAlertId?: string
+  proxyDeliveryId?: string
+  errorText?: string
+  occurredAt: string
+  createdAt: string
+  updatedAt: string
+  // Server-enriched: this terminal entry order still covers an armed
+  // bracket_monitor row — the only case where "retire arm" does anything.
+  uncoveredArm?: boolean
 }
 
 export type TradeOutcome = 'win' | 'loss' | 'breakeven'
@@ -98,9 +234,18 @@ export interface TradeEvent {
   realizedDollarsCents?: number
   outcome?: TradeOutcome
   occurredAt: string
+  proxyAlertId?: string
+  entryArmedDeliveryStatus?: 'delivered' | 'failed' | 'extension' | 'blocked' | 'unknown'
+  entryArmedDeliveryDetail?: string
+  entryArmedDeliveryId?: string
   excludedFromPerformance: boolean
   exclusionReason?: 'test_data' | 'erroneous'
+  excludedByUserId?: string
+  exclusionUpdatedAt?: string
   adjustmentNote?: string
+  adjustedAt?: string
+  adjustedByUserId?: string
+  adjustedByEmail?: string
 }
 
 export interface CalendarDayRange {
@@ -126,11 +271,47 @@ export interface CalendarDay {
   rEarned?: number | null
   hiddenFromPerformance?: boolean
   ranges: CalendarDayRange[]
+  trades?: RangeTradeEvent[]
+}
+
+export interface RangeTradeEvent {
+  id: string
+  rangeName: string
+  eventId: string
+  tradeId: string
+  eventType: TradeEventType
+  instrument: string
+  side: 'long' | 'short'
+  action?: 'buy' | 'sell' | 'cancel' | 'exit'
+  quantity: number
+  entryPrice?: number
+  exitPrice?: number
+  realizedTicksCents?: number
+  realizedDollarsCents?: number
+  outcome?: TradeOutcome
+  occurredAt: string
+  proxyAlertId?: string
+  adjustmentNote?: string
 }
 
 export interface TradeCalendarMonthView {
   month: string
   days: CalendarDay[]
+  /** Prior-month days that fill the grid's leading cells — display only,
+      never counted in `summary`. */
+  trailingDays?: Array<
+    Pick<
+      CalendarDay,
+      | 'date'
+      | 'realizedDollarsCents'
+      | 'netTicksCents'
+      | 'closedCount'
+      | 'wins'
+      | 'losses'
+      | 'breakevens'
+      | 'winRate'
+    >
+  >
   summary: JournalMetrics
 }
 
@@ -152,6 +333,15 @@ export interface TradeJournal {
   rangeNames: string[]
   rangeEntries: Record<string, number>
   rangeRisk?: Record<string, number>
+}
+
+export interface AccountPnlReview {
+  account: BridgeAccount
+  since: string
+  until: string
+  summary: JournalMetrics
+  ranges: CalendarDayRange[]
+  trades: TradeEvent[]
 }
 
 export type AlertActivityFilter =
@@ -195,6 +385,7 @@ export interface AlertFeedEntry {
   deliveryCount: number
   tradeEventCount: number
   matchedUserCount: number
+  matchedUserEmails: string[]
   matchedAccountCount: number
   matchedAccountNames: string[]
   traderspostDeliveredCount: number
@@ -202,77 +393,6 @@ export interface AlertFeedEntry {
   traderspostPendingCount: number
   traderspostNotConfiguredCount: number
   currentUserLinked: boolean
-}
-
-export type BrokerOrderAction = 'buy' | 'sell' | 'cancel' | 'exit'
-
-export type BrokerOrderState =
-  | 'pending'
-  | 'acknowledged'
-  | 'rejected'
-  | 'uncertain'
-  | 'filled'
-  | 'closed'
-  | 'cancelled'
-
-export interface BrokerOrder {
-  id: string
-  accountId: string
-  accountName?: string
-  rangeName: string
-  bracketId?: string
-  orderId: string
-  action: BrokerOrderAction
-  status: BrokerOrderState
-  dispatchStatus?: BrokerOrderState
-  statusSource?: string
-  destination?: 'traderspost' | 'crosstrade'
-  instrument: string
-  side?: 'long' | 'short'
-  quantity?: number
-  price?: number
-  errorText?: string
-  occurredAt: string
-}
-
-export type BracketMonitorState = 'armed' | 'filled' | 'closed' | 'cancelled'
-
-export interface OpenTradeSanity {
-  accountId: string
-  accountName: string
-  rangeName: string
-  instrument: string
-  side: 'long' | 'short'
-  bracketId: string
-  state: BracketMonitorState
-  quantity: number
-  entryPrice?: number
-  lastOccurredAt: string
-  hasTradeEvent: boolean
-  hasLifecycleAlert: boolean
-  hasDispatchAlert: boolean
-  deliveryStatus?: string
-  brokerOrderStatus?: BrokerOrderState
-  brokerOrderErrorText?: string
-  routeTraderspostEnabled: boolean
-  oppositeSideExists: boolean
-}
-
-export interface MonitoringData {
-  openTradeSanity: OpenTradeSanity[]
-  brokerOrders: BrokerOrder[]
-}
-
-export interface RangeRoute {
-  id: string
-  rangeName: string
-  userId: string
-  accountId: string
-  extensionEnabled: boolean
-  traderspostEnabled: boolean
-  runScheduled: boolean
-  createdAt: string
-  updatedAt: string
 }
 
 export interface RangeConfiguration {
@@ -316,6 +436,15 @@ export interface RangeSubcategoryAssignment {
   subcategoryName: string
   assignedByUserId: string
   updatedAt: string
+  // Per-model run-day overrides for this range; null = inherit the range's
+  // own run day for accounts routed through this model.
+  runMonday?: boolean | null
+  runTuesday?: boolean | null
+  runWednesday?: boolean | null
+  runThursday?: boolean | null
+  runFriday?: boolean | null
+  runSaturday?: boolean | null
+  runSunday?: boolean | null
 }
 
 export interface SharedRangeSubscription {
@@ -329,13 +458,6 @@ export interface SharedRangeSubscription {
   updatedAt: string
 }
 
-export interface RangeReviewFlag {
-  rangeName: string
-  flaggedByUserId?: string
-  reason?: string
-  updatedAt?: string
-}
-
 export interface SharedRangeDetail {
   rangeName: string
   createdBy?: { id: string; email: string }
@@ -344,8 +466,51 @@ export interface SharedRangeDetail {
   currentMonth: JournalMetrics
   currentWeek: JournalMetrics
   currentDay: JournalMetrics
+  performanceAllTime: JournalMetrics
+  performanceCurrentMonth: JournalMetrics
+  performanceCurrentWeek: JournalMetrics
+  performanceCurrentDay: JournalMetrics
   subscriptions: SharedRangeSubscription[]
   reviewFlag?: RangeReviewFlag
+}
+
+export type BracketMonitorState = 'armed' | 'filled' | 'closed' | 'cancelled'
+
+export interface OpenTradeSanity {
+  accountId: string
+  accountName: string
+  rangeName: string
+  instrument: string
+  side: 'long' | 'short'
+  bracketId: string
+  tradeId: string
+  state: BracketMonitorState
+  quantity: number
+  entryPrice?: number
+  lastOccurredAt: string
+  hasTradeEvent: boolean
+  tradeEventType?: TradeEventType
+  tradeEventOccurredAt?: string
+  hasLifecycleAlert: boolean
+  hasDispatchAlert: boolean
+  dispatchAlertReceivedAt?: string
+  dispatchAlertAction?: 'buy' | 'sell'
+  deliveryStatus?: string
+  deliveryCreatedAt?: string
+  brokerOrderStatus?: BrokerOrderState
+  brokerOrderErrorText?: string
+  brokerOrderOccurredAt?: string
+  routeTraderspostEnabled: boolean
+  routeExtensionEnabled: boolean
+  routeRunScheduled: boolean
+  isScheduledDay?: boolean
+  oppositeSideExists: boolean
+  oppositeSideState?: BracketMonitorState
+}
+
+export interface MonitoringData {
+  openTradeSanity: OpenTradeSanity[]
+  brokerOrders: BrokerOrder[]
 }
 
 export interface RangesData {
@@ -353,95 +518,6 @@ export interface RangesData {
   rangeSubcategories: RangeSubcategory[]
   rangeSubcategoryAssignments: RangeSubcategoryAssignment[]
   rangeConfigurations: RangeConfiguration[]
-}
-
-export type DraftStatus =
-  | 'pending'
-  | 'reviewed'
-  | 'submitted'
-  | 'rejected'
-  | 'expired'
-
-export interface OrderDraft {
-  id: string
-  userId: string
-  idempotencyKey: string
-  status: DraftStatus
-  ticker: string
-  action: 'buy' | 'sell' | 'cancel'
-  sentiment?: 'long' | 'short' | 'flat'
-  quantity: number
-  orderType: 'market' | 'limit' | 'stop' | 'stop_limit' | 'cancel'
-  signalPrice?: number
-  limitPrice?: number
-  stopPrice?: number
-  strategyStopPrice?: number
-  strategyStopMode?: 'close_confirmed' | 'intrabar'
-  bracketId?: string
-  bracketSide?: 'long' | 'short'
-  rangeName?: string
-  orderLeg?: string
-  cancellationMessage?: string
-  extensionEligible?: boolean
-  accountId?: string
-  accountName?: string
-  receivedAt: string
-  reviewedAt?: string
-  submittedAt?: string
-}
-
-export interface AccountPnlReview {
-  account: BridgeAccount
-  since: string
-  until: string
-  summary: JournalMetrics
-  ranges: CalendarDayRange[]
-  trades: TradeEvent[]
-}
-
-export interface RangeTradeEvent {
-  id: string
-  rangeName: string
-  eventId: string
-  tradeId: string
-  eventType: TradeEventType
-  instrument: string
-  side: 'long' | 'short'
-  action?: 'buy' | 'sell' | 'cancel' | 'exit'
-  quantity: number
-  entryPrice?: number
-  exitPrice?: number
-  realizedTicksCents?: number
-  realizedDollarsCents?: number
-  outcome?: TradeOutcome
-  occurredAt: string
-  adjustmentNote?: string
-}
-
-export interface UntrackedRange {
-  rangeName: string
-  accountNames?: string[]
-  lastSeenAt?: string
-}
-
-export interface ReapplyOperationSummary {
-  id: string
-  eventId: string
-  rangeName?: string
-  status?: string
-  createdAt?: string
-  updatedAt?: string
-}
-
-export interface ProcessRun {
-  id: string
-  pid?: number
-  startedAt: string
-  endedAt?: string
-  lastHeartbeatAt?: string
-  cleanExit?: boolean
-  rssBytes?: number
-  heapUsedBytes?: number
 }
 
 export interface DebuggingData {

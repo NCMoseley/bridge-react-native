@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { Stack, useRouter, useSegments } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { AuthProvider, useAuth } from '../context/AuthContext'
+import { ToastProvider } from '../context/ToastContext'
 import { colors } from '../components/ui'
 
 function AuthGate() {
@@ -49,7 +50,9 @@ function AuthGate() {
 export default function RootLayout() {
   return (
     <AuthProvider>
-      <AuthGate />
+      <ToastProvider>
+        <AuthGate />
+      </ToastProvider>
     </AuthProvider>
   )
 }

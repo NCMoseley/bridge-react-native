@@ -1,4 +1,5 @@
 import { API_BASE } from '../config'
+import { emitEvent } from '../utils/events'
 
 let cachedCsrfToken: string | null = null
 
@@ -61,6 +62,7 @@ export async function postForm(
     res = await send(await fetchCsrfToken())
   }
   if (!res.ok) await failRequest(action, res)
+  emitEvent('api:success')
   return res
 }
 
@@ -78,6 +80,7 @@ export async function postJson(action: string, body: Record<string, unknown>) {
     res = await send(await fetchCsrfToken())
   }
   if (!res.ok) await failRequest(action, res)
+  emitEvent('api:success')
   return res
 }
 

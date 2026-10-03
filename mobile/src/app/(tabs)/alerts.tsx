@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
+  Alert as RnAlert,
   FlatList,
+  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -8,48 +10,61 @@ import {
   Text,
   View,
 } from 'react-native'
-import { getJson } from '../../api/client'
+import { getJson, postForm } from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
-import { Card, Spinner, Stat, colors } from '../../components/ui'
+import { useToast } from '../../context/ToastContext'
+import {
+  Button,
+  Field,
+  Input,
+  SelectPicker,
+  Spinner,
+  Stat,
+  colors,
+} from '../../components/ui'
 import type {
   AlertActivityFilter,
   AlertFeedEntry,
   AlertFeedSummary,
   AlertTimeFilter,
 } from '../../types'
-import { formatTime } from '../../utils/format'
+import { getCachedAlerts, getPreloadedPage, setCachedAlerts } from '../../utils/alerts-cache'
 
-const PAGE_SIZE = 25
+const PAGE_SIZE = 50
 
-const TIME_MS: Record<Exclude<AlertTimeFilter, 'all'>, number> = {
-  '15m': 15 * 60_000,
-  '30m': 30 * 60_000,
-  hour: 60 * 60_000,
-  '2h': 2 * 60 * 60_000,
-  '4h': 4 * 60 * 60_000,
-  '12h': 12 * 60 * 60_000,
-  day: 24 * 60 * 60_000,
-  '3d': 3 * 24 * 60 * 60_000,
-  week: 7 * 24 * 60 * 60_000,
+const TIME_MS: Record<AlertTimeFilter, number> = {
+  all: Number.POSITIVE_INFINITY,
+  '15m': 15 * 60 * 1000,
+  '30m': 30 * 60 * 1000,
+  hour: 60 * 60 * 1000,
+  '2h': 2 * 60 * 60 * 1000,
+  '4h': 4 * 60 * 60 * 1000,
+  '12h': 12 * 60 * 60 * 1000,
+  day: 24 * 60 * 60 * 1000,
+  '3d': 3 * 24 * 60 * 60 * 1000,
+  week: 7 * 24 * 60 * 60 * 1000,
 }
 
 const TIME_OPTIONS: { value: AlertTimeFilter; label: string }[] = [
-  { value: '15m', label: '15m' },
-  { value: 'hour', label: '1h' },
-  { value: '4h', label: '4h' },
-  { value: 'day', label: '24h' },
-  { value: '3d', label: '3d' },
-  { value: 'week', label: '7d' },
-  { value: 'all', label: 'All' },
+  { value: 'all', label: 'Any time' },
+  { value: '15m', label: 'Past 15 minutes' },
+  { value: '30m', label: 'Past 30 minutes' },
+  { value: 'hour', label: 'Past hour' },
+  { value: '2h', label: 'Past 2 hours' },
+  { value: '4h', label: 'Past 4 hours' },
+  { value: '12h', label: 'Past 12 hours' },
+  { value: 'day', label: 'Past 24 hours' },
+  { value: '3d', label: 'Past 3 days' },
+  { value: 'week', label: 'Past 7 days' },
 ]
 
 const ACTIVITY_OPTIONS: { value: AlertActivityFilter; label: string }[] = [
-  { value: 'all', label: 'All' },
-  { value: 'routed', label: 'Routed' },
-  { value: 'unrouted', label: 'Unrouted' },
-  { value: 'lifecycle', label: 'Lifecycle' },
-  { value: 'traderspost_delivered', label: 'TP delivered' },
-  { value: 'traderspost_failed', label: 'TP failed' },
+  { value: 'all', label: 'All activity' },
+  { value: 'routed', label: 'Routed only' },
+  { value: 'unrouted', label: 'Unrouted only' },
+  { value: 'lifecycle', label: 'Lifecycle only' },
+  { value: 'traderspost_delivered', label: 'Broker delivered' },
+  { value: 'traderspost_failed', label: 'Broker failed' },
 ]
 
 interface AlertsResponse {
@@ -59,211 +74,307 @@ interface AlertsResponse {
   summary: AlertFeedSummary
 }
 
-function ChipRow<T extends string>({
-  options,
-  value,
-  onChange,
-}: {
-  options: { value: T; label: string }[]
-  value: T
-  onChange: (v: T) => void
-}) {
-  return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-      <View style={styles.chipRow}>
-        {options.map((o) => (
-          <Pressable
-            key={o.value}
-            onPress={() => onChange(o.value)}
-            style={[styles.chip, value === o.value && styles.chipActive]}
-          >
-            <Text
-              style={[
-                styles.chipText,
-                value === o.value && styles.chipTextActive,
-              ]}
-            >
-              {o.label}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-    </ScrollView>
-  )
+function describeActivity(alert: AlertFeedEntry): string {
+  if (alert.tradeEventCount > 0) {
+    return alert.deliveryCount > 0 ? 'Lifecycle recorded' : 'Lifecycle stored'
+  }
+  if (alert.deliveryCount === 0) return 'Not routed'
+  const notes: string[] = []
+  if (alert.traderspostDeliveredCount > 0) notes.push(`${alert.traderspostDeliveredCount} broker delivered`)
+  if (alert.traderspostPendingCount > 0) notes.push(`${alert.traderspostPendingCount} broker pending`)
+  if (alert.traderspostFailedCount > 0) notes.push(`${alert.traderspostFailedCount} broker failed`)
+  if (alert.traderspostNotConfiguredCount > 0) notes.push(`${alert.traderspostNotConfiguredCount} destination missing`)
+  return notes.length
+    ? `${alert.deliveryCount} route${alert.deliveryCount === 1 ? '' : 's'} matched · ${notes.join(' · ')}`
+    : `${alert.deliveryCount} route${alert.deliveryCount === 1 ? '' : 's'} matched`
 }
 
-function deliveryColor(a: AlertFeedEntry): string {
-  if (a.traderspostFailedCount > 0) return colors.negative
-  if (a.traderspostPendingCount > 0) return '#fbbf24'
-  if (a.traderspostDeliveredCount > 0) return colors.positive
-  return colors.muted
+function statusIcon(alert: AlertFeedEntry): string {
+  if (alert.tradeEventCount > 0) return '↻'
+  if (alert.deliveryCount === 0) return '⏚'
+  if (alert.traderspostFailedCount > 0) return '✕'
+  if (alert.traderspostPendingCount > 0) return '⏳'
+  if (alert.traderspostDeliveredCount > 0) return '䷧'
+  if (alert.traderspostNotConfiguredCount > 0) return '⚠'
+  return '↖︎'
+}
+
+function statusColor(alert: AlertFeedEntry): string {
+  if (alert.tradeEventCount > 0) return '#a5b4fc'
+  if (alert.deliveryCount === 0) return colors.faint
+  if (alert.traderspostFailedCount > 0) return colors.negative
+  if (alert.traderspostPendingCount > 0) return colors.amber
+  if (alert.traderspostDeliveredCount > 0) return colors.positive
+  if (alert.traderspostNotConfiguredCount > 0) return colors.amber
+  return colors.positive
+}
+
+function formatDateTime(value: string): string {
+  return new Date(value).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone: 'Etc/GMT+4',
+  })
+}
+
+function formatPayload(json: string): string {
+  try {
+    return JSON.stringify(JSON.parse(json), null, 2)
+  } catch {
+    return json
+  }
+}
+
+const EMPTY_SUMMARY: AlertFeedSummary = {
+  totalAlerts: 0,
+  routedAlerts: 0,
+  unroutedAlerts: 0,
+  traderspostDeliveredCount: 0,
+  traderspostPendingCount: 0,
+  traderspostFailedCount: 0,
 }
 
 export default function AlertsScreen() {
   const { user } = useAuth()
-  const [time, setTime] = useState<AlertTimeFilter>('day')
+  const [name, setName] = useState('')
+  const [time, setTime] = useState<AlertTimeFilter>('all')
   const [activity, setActivity] = useState<AlertActivityFilter>('all')
   const [page, setPage] = useState(1)
-  const [data, setData] = useState<AlertsResponse | null>(null)
   const [loading, setLoading] = useState(true)
+  const [refreshKey, setRefreshKey] = useState(0)
   const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [selectedAlert, setSelectedAlert] = useState<AlertFeedEntry | null>(null)
+  const { success, error: showError } = useToast()
 
-  const load = useCallback(async () => {
-    const params = new URLSearchParams()
-    if (activity !== 'all') params.set('activity', activity)
-    if (time !== 'all') {
-      params.set(
-        'receivedAfter',
-        new Date(Date.now() - TIME_MS[time]).toISOString(),
-      )
-    }
-    params.set('limit', String(PAGE_SIZE))
-    params.set('offset', String((page - 1) * PAGE_SIZE))
-    try {
-      setData(await getJson<AlertsResponse>(`/api/alerts?${params}`))
-      setError(null)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load alerts')
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
-  }, [time, activity, page])
+  const [serverAlertFeed, setServerAlertFeed] = useState<{ alerts: AlertFeedEntry[]; totalCount: number } | undefined>()
+  const [serverAlertRangeNames, setServerAlertRangeNames] = useState<string[] | undefined>()
+  const [serverAlertSummary, setServerAlertSummary] = useState<AlertFeedSummary | undefined>()
+
+  const alertFeed = serverAlertFeed ?? { alerts: [], totalCount: 0 }
+  const alertRangeNames = serverAlertRangeNames ?? []
+  const alertSummary = serverAlertSummary ?? EMPTY_SUMMARY
 
   useEffect(() => {
-    setLoading(true)
-    void load()
-  }, [load, user?.userId])
+    setPage(1)
+  }, [name, time, activity])
 
-  const totalPages = Math.max(1, Math.ceil((data?.totalCount ?? 0) / PAGE_SIZE))
-  const summary = data?.summary
+  useEffect(() => {
+    const offset = (page - 1) * PAGE_SIZE
+    const params = new URLSearchParams()
+    if (activity !== 'all') params.set('activity', activity)
+    if (name.trim()) params.set('name', name.trim())
+    if (time !== 'all') {
+      params.set('receivedAfter', new Date(Date.now() - TIME_MS[time]).toISOString())
+    }
+    params.set('limit', String(PAGE_SIZE))
+    params.set('offset', String(offset))
+    const query = params.toString()
+
+    const cached = getCachedAlerts(query)
+    if (cached) {
+      setServerAlertFeed({ alerts: cached.alerts, totalCount: cached.totalCount })
+      setServerAlertRangeNames(cached.rangeNames)
+      setServerAlertSummary(cached.summary)
+      setLoading(false)
+    } else {
+      const preloaded =
+        !name.trim() && time === 'all' && activity === 'all' && page <= 2
+          ? getPreloadedPage(page, PAGE_SIZE)
+          : undefined
+      if (preloaded) {
+        setServerAlertFeed({ alerts: preloaded.alerts, totalCount: preloaded.totalCount })
+        setServerAlertRangeNames(preloaded.rangeNames)
+        setServerAlertSummary(preloaded.summary)
+        setLoading(false)
+      } else {
+        setLoading(true)
+      }
+    }
+
+    getJson<AlertsResponse>(`/api/alerts${query ? `?${query}` : ''}`)
+      .then((data) => {
+        setServerAlertFeed({ alerts: data.alerts, totalCount: data.totalCount })
+        setServerAlertRangeNames(data.rangeNames)
+        setServerAlertSummary(data.summary)
+        setCachedAlerts(query, {
+          alerts: data.alerts,
+          totalCount: data.totalCount,
+          rangeNames: data.rangeNames,
+          summary: data.summary,
+        })
+      })
+      .catch(() => {})
+      .finally(() => {
+        setLoading(false)
+        setRefreshing(false)
+      })
+  }, [name, time, activity, page, refreshKey, user?.userId])
+
+  const handleDeleteAlert = useCallback(
+    (alert: AlertFeedEntry) => {
+      RnAlert.alert(
+        'Delete alert',
+        `Delete alert for ${alert.rangeName ?? '—'} from ${formatDateTime(alert.receivedAt)}? This will also remove its deliveries.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: () => {
+              postForm('/alerts/delete', { alertId: alert.alertId })
+                .then(() => {
+                  setSelectedAlert(null)
+                  setRefreshKey((k) => k + 1)
+                  success('Alert deleted')
+                })
+                .catch(() => showError('Failed to delete alert'))
+            },
+          },
+        ],
+      )
+    },
+    [success, showError],
+  )
+
+  const totalPages = Math.max(1, Math.ceil(alertFeed.totalCount / PAGE_SIZE))
 
   return (
     <View style={styles.container}>
-      <View style={styles.filters}>
-        <ChipRow
-          options={TIME_OPTIONS}
-          value={time}
-          onChange={(v) => {
-            setTime(v)
-            setPage(1)
-          }}
-        />
-        <ChipRow
-          options={ACTIVITY_OPTIONS}
-          value={activity}
-          onChange={(v) => {
-            setActivity(v)
-            setPage(1)
-          }}
-        />
-      </View>
-      {summary ? (
-        <View style={styles.summaryRow}>
-          <Stat label="Total" value={String(summary.totalAlerts)} />
-          <Stat label="Routed" value={String(summary.routedAlerts)} />
-          <Stat
-            label="Delivered"
-            value={String(summary.traderspostDeliveredCount)}
-            color={colors.positive}
-          />
-          <Stat
-            label="Failed"
-            value={String(summary.traderspostFailedCount)}
-            color={
-              summary.traderspostFailedCount > 0
-                ? colors.negative
-                : colors.text
-            }
-          />
-        </View>
-      ) : null}
-      {loading && !data ? (
-        <Spinner />
-      ) : error && !data ? (
-        <Text style={styles.error}>{error}</Text>
-      ) : (
-        <>
-          <FlatList
-            contentContainerStyle={styles.list}
-            data={data?.alerts ?? []}
-            keyExtractor={(a) => a.alertId}
-            ListEmptyComponent={
-              <Text style={styles.empty}>No alerts in this window.</Text>
-            }
-            refreshControl={
-              <RefreshControl
-                onRefresh={() => {
-                  setRefreshing(true)
-                  void load()
-                }}
-                refreshing={refreshing}
-                tintColor={colors.accent}
+      <FlatList
+        data={alertFeed.alerts}
+        keyExtractor={(a) => a.alertId}
+        contentContainerStyle={{ padding: 12, paddingBottom: 20 }}
+        ListHeaderComponent={
+          <View>
+            <View style={styles.summaryRow}>
+              <Stat label="Received" value={String(alertSummary.totalAlerts)} />
+              <Stat label="Drafts sent" value={String(alertSummary.routedAlerts)} />
+              <Stat
+                label="Broker delivered"
+                value={String(alertSummary.traderspostDeliveredCount)}
+                color={colors.positive}
               />
-            }
-            renderItem={({ item }) => (
-              <View style={styles.alertRow}>
+              <Stat
+                label="Failed"
+                value={String(alertSummary.traderspostFailedCount)}
+                color={alertSummary.traderspostFailedCount > 0 ? colors.negative : colors.text}
+              />
+            </View>
+            <View style={styles.filterCard}>
+              <Field label="Name">
+                <Input value={name} onChangeText={setName} placeholder="Breakfast" />
+              </Field>
+              {alertRangeNames.length > 0 ? (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View style={{ flexDirection: 'row', gap: 6, marginBottom: 10 }}>
+                    {alertRangeNames.slice(0, 12).map((range) => (
+                      <Pressable key={range} onPress={() => setName(range)} style={styles.nameChip}>
+                        <Text style={styles.nameChipText}>{range}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </ScrollView>
+              ) : null}
+              <View style={{ flexDirection: 'row', gap: 10 }}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.alertTitle}>
-                    {item.action.toUpperCase()} {item.ticker}
-                    {item.rangeName ? ` · ${item.rangeName}` : ''}
+                  <SelectPicker label="Time" options={TIME_OPTIONS} value={time} onChange={setTime} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <SelectPicker label="Activity" options={ACTIVITY_OPTIONS} value={activity} onChange={setActivity} />
+                </View>
+              </View>
+            </View>
+            <View style={styles.pagerRow}>
+              <Text style={styles.dim}>
+                Page {page} of {totalPages} · {alertFeed.alerts.length} of {alertFeed.totalCount} alerts
+              </Text>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <Button small variant="ghost" title="Prev" disabled={page <= 1} onPress={() => setPage((p) => p - 1)} />
+                <Button
+                  small
+                  variant="ghost"
+                  title="Next"
+                  disabled={page * PAGE_SIZE >= alertFeed.totalCount}
+                  onPress={() => setPage((p) => p + 1)}
+                />
+              </View>
+            </View>
+            {loading && alertFeed.alerts.length === 0 ? <Spinner /> : null}
+          </View>
+        }
+        ListEmptyComponent={
+          !loading ? <Text style={styles.dimCenter}>No alerts match the selected filters.</Text> : null
+        }
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true)
+              setRefreshKey((k) => k + 1)
+            }}
+            tintColor={colors.accent}
+          />
+        }
+        renderItem={({ item: alert }) => (
+          <View style={styles.alertRow}>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <Text style={styles.alertTitle}>{alert.rangeName ?? '—'}</Text>
+                <Text style={styles.alertAction}>{alert.action}</Text>
+                <Text style={styles.dim}>{alert.ticker}</Text>
+              </View>
+              <Text style={styles.dimSmall}>{formatDateTime(alert.receivedAt)}</Text>
+              {alert.currentUserLinked ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                  <Text style={{ color: statusColor(alert), fontSize: 13, fontWeight: '700' }}>
+                    {statusIcon(alert)}
                   </Text>
-                  <Text style={styles.alertSub}>
-                    {formatTime(item.receivedAt)} · {item.matchedAccountCount}{' '}
-                    acct{item.matchedAccountCount === 1 ? '' : 's'}
-                    {item.matchedAccountNames.length
-                      ? ` (${item.matchedAccountNames.join(', ')})`
-                      : ''}
+                  <Text style={[styles.dimSmall, { flex: 1 }]} numberOfLines={2}>
+                    {describeActivity(alert)}
                   </Text>
                 </View>
-                <Text style={[styles.delivery, { color: deliveryColor(item) }]}>
-                  {item.traderspostFailedCount > 0
-                    ? `${item.traderspostFailedCount} failed`
-                    : item.traderspostPendingCount > 0
-                      ? 'pending'
-                      : item.traderspostDeliveredCount > 0
-                        ? 'delivered'
-                        : 'unrouted'}
-                </Text>
-              </View>
-            )}
-          />
-          <View style={styles.pager}>
-            <Pressable
-              disabled={page <= 1}
-              onPress={() => setPage((p) => p - 1)}
-            >
-              <Text style={[styles.pagerText, page <= 1 && styles.disabled]}>
-                ‹ Prev
-              </Text>
-            </Pressable>
-            <Text style={styles.pagerText}>
-              {page} / {totalPages}
-            </Text>
-            <Pressable
-              disabled={page >= totalPages}
-              onPress={() => setPage((p) => p + 1)}
-            >
-              <Text
-                style={[
-                  styles.pagerText,
-                  page >= totalPages && styles.disabled,
-                ]}
-              >
-                Next ›
-              </Text>
-            </Pressable>
+              ) : (
+                <Text style={styles.dimSmall}>—</Text>
+              )}
+            </View>
+            <View style={{ gap: 4 }}>
+              <Button small variant="ghost" title="JSON" onPress={() => setSelectedAlert(alert)} />
+              <Button small variant="ghost" title="✕" onPress={() => handleDeleteAlert(alert)} />
+            </View>
           </View>
-        </>
-      )}
+        )}
+      />
+
+      <Modal visible={selectedAlert !== null} transparent animationType="fade" onRequestClose={() => setSelectedAlert(null)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>
+              Alert from {selectedAlert ? formatDateTime(selectedAlert.receivedAt) : ''}
+            </Text>
+            <ScrollView style={{ maxHeight: 400 }}>
+              <Text style={styles.json}>{selectedAlert ? formatPayload(selectedAlert.payloadJson) : ''}</Text>
+            </ScrollView>
+            <View style={{ flexDirection: 'row', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
+              <Button
+                small
+                variant="danger"
+                title="Delete"
+                onPress={() => selectedAlert && handleDeleteAlert(selectedAlert)}
+              />
+              <Button small variant="ghost" title="Close" onPress={() => setSelectedAlert(null)} />
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
+  alertAction: { color: colors.accent, fontSize: 12, fontWeight: '700', textTransform: 'uppercase' },
   alertRow: {
-    alignItems: 'center',
     backgroundColor: colors.card,
     borderColor: colors.border,
     borderRadius: 10,
@@ -272,41 +383,51 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     padding: 12,
   },
-  alertSub: { color: colors.muted, fontSize: 12, marginTop: 2 },
-  alertTitle: { color: colors.text, fontSize: 14, fontWeight: '600' },
-  chip: {
+  alertTitle: { color: colors.text, fontSize: 14, fontWeight: '700' },
+  container: { backgroundColor: colors.bg, flex: 1 },
+  dim: { color: colors.muted, fontSize: 12 },
+  dimCenter: { color: colors.muted, fontSize: 13, paddingVertical: 30, textAlign: 'center' },
+  dimSmall: { color: colors.muted, fontSize: 11 },
+  filterCard: {
     backgroundColor: colors.card,
     borderColor: colors.border,
-    borderRadius: 14,
+    borderRadius: 10,
     borderWidth: 1,
-    marginRight: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-  },
-  chipActive: { backgroundColor: colors.accent, borderColor: colors.accent },
-  chipRow: { flexDirection: 'row', paddingVertical: 4 },
-  chipText: { color: colors.muted, fontSize: 12 },
-  chipTextActive: { color: '#082f49', fontWeight: '700' },
-  container: { backgroundColor: colors.bg, flex: 1 },
-  delivery: { fontSize: 12, fontWeight: '700' },
-  disabled: { opacity: 0.3 },
-  empty: { color: colors.muted, paddingVertical: 20, textAlign: 'center' },
-  error: { color: colors.negative, margin: 20, textAlign: 'center' },
-  filters: { paddingHorizontal: 12, paddingTop: 8 },
-  list: { padding: 12 },
-  pager: {
-    alignItems: 'center',
-    borderTopColor: colors.border,
-    borderTopWidth: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    marginBottom: 10,
     padding: 12,
   },
-  pagerText: { color: colors.accent, fontSize: 14 },
-  summaryRow: {
-    flexDirection: 'row',
-    gap: 16,
-    paddingHorizontal: 14,
+  json: { color: colors.text, fontFamily: 'Menlo', fontSize: 10 },
+  modalBackdrop: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    flex: 1,
+    justifyContent: 'center',
+    padding: 16,
+  },
+  modalCard: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: 12,
+    borderWidth: 1,
+    maxHeight: '85%',
+    padding: 16,
+    width: '100%',
+  },
+  modalTitle: { color: colors.text, fontSize: 15, fontWeight: '700', marginBottom: 10 },
+  nameChip: {
+    backgroundColor: colors.bg,
+    borderColor: colors.border,
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 10,
     paddingVertical: 4,
   },
+  nameChipText: { color: colors.muted, fontSize: 11 },
+  pagerRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  summaryRow: { flexDirection: 'row', gap: 16, marginBottom: 10 },
 })
