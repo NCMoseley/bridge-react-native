@@ -23,6 +23,17 @@ export function formatQuantity(value: number | null | undefined): string {
   return String(Number(value.toFixed(4)))
 }
 
+export function formatPnlCompact(cents: number): string {
+  const sign = cents < 0 ? '-' : '+'
+  const dollars = Math.abs(cents) / 100
+  if (dollars >= 1000) {
+    const k = dollars / 1000
+    const s = k.toFixed(2).replace(/\.?0+$/, '')
+    return `${sign}$${s}k`
+  }
+  return `${sign}$${Math.round(dollars)}`
+}
+
 export function formatTicks(cents: number): string {
   const value = cents / 100
   return `${value > 0 ? '+' : ''}${value.toFixed(2)}`

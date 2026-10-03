@@ -11,6 +11,7 @@ import EventSource from 'react-native-sse'
 import { API_BASE } from '../config'
 import { emitEvent, onEvent } from '../utils/events'
 import { playAlertBeep, playToastSound } from '../utils/alertSound'
+import { initNotifications, notifyToast } from '../utils/notifications'
 
 interface Toast {
   id: number
@@ -83,6 +84,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
+    initNotifications()
     const source = new EventSource<'toast:success' | 'toast:error' | 'toast:warning' | 'journal:refresh' | 'log:bridge'>(
       `${API_BASE}/api/events/stream`,
     )
@@ -90,6 +92,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       try {
         const data = JSON.parse(e.data ?? '') as { message: string; silent?: boolean }
         if (!data.silent) playToastSound('success')
+        notifyToast(data.message, 'success')
         success(data.message)
       } catch {
         // ignore malformed events
@@ -99,6 +102,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       try {
         const data = JSON.parse(e.data ?? '') as { message: string; persistent?: boolean }
         playToastSound('error')
+        notifyToast(data.message, 'error')
         error(data.message, Boolean(data.persistent))
       } catch {
         // ignore malformed events
@@ -108,6 +112,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       try {
         const data = JSON.parse(e.data ?? '') as { message: string; persistent?: boolean }
         playToastSound('warning')
+        notifyToast(data.message, 'warning')
         addToast(data.message, 'warning', Boolean(data.persistent))
       } catch {
         // ignore malformed events

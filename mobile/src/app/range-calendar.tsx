@@ -30,6 +30,7 @@ import {
   formatJournalDateKey,
   formatPercent,
   formatPnl,
+  formatPnlCompact,
   formatQuantity,
   formatTicks,
 } from '../utils/format'
@@ -288,10 +289,10 @@ export default function RangeCalendarScreen() {
                 styles.dayCell,
                 day
                   ? isBeDay || (!isGrey && day.realizedDollarsCents > 0)
-                    ? { borderColor: colors.positive }
+                    ? { backgroundColor: 'rgba(20,83,45,0.35)', borderColor: colors.positive }
                     : isGrey
                       ? { opacity: 0.6 }
-                      : { borderColor: colors.negative }
+                      : { backgroundColor: 'rgba(69,10,10,0.35)', borderColor: colors.negative }
                   : null,
                 dateKey === todayKey && { borderColor: colors.accent },
               ]}
@@ -306,10 +307,7 @@ export default function RangeCalendarScreen() {
               {day ? (
                 <>
                   <Text style={[styles.dayPnl, { color: pnlColor(day.realizedDollarsCents) }]} numberOfLines={1}>
-                    {formatPnl(day.realizedDollarsCents)}
-                  </Text>
-                  <Text style={styles.daySub} numberOfLines={1}>
-                    {day.closedCount}t {day.wins}/{day.losses}
+                    {formatPnlCompact(day.realizedDollarsCents)}
                   </Text>
                   {hidden ? <Text style={styles.dayTag}>EXCL</Text> : isBeDay ? <Text style={[styles.dayTag, { color: colors.positive }]}>BE</Text> : null}
                 </>
@@ -425,9 +423,9 @@ const styles = StyleSheet.create({
   dayCell: {
     aspectRatio: 0.85,
     backgroundColor: colors.card,
-    borderColor: colors.border,
+    borderColor: colors.borderLight,
     borderRadius: 6,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: 4,
     width: '13.5%',
   },

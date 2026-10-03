@@ -8,10 +8,10 @@ import {
   View,
 } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
-import { getJson, postJson } from '../api/client'
-import { useToast } from '../context/ToastContext'
-import { Button, Card, Field, Input, SelectPicker, Spinner, colors } from '../components/ui'
-import type { DraftStatus, OrderDraft } from '../types'
+import { getJson, postJson } from '../../api/client'
+import { useToast } from '../../context/ToastContext'
+import { Button, Card, Field, Input, SelectPicker, Spinner, colors } from '../../components/ui'
+import type { DraftStatus, OrderDraft } from '../../types'
 
 import {
   absoluteProtection,
@@ -21,7 +21,7 @@ import {
   formatStrategyStop,
   strategyStopPresentation,
   formatPrice,
-} from '../utils/drafts'
+} from '../../utils/drafts'
 
 type DraftAction = 'submitted' | 'rejected' | 'reviewed' | 'resend'
 

@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native'
 import { useRouter } from 'expo-router'
+import { storage } from '../../utils/storage'
 import { getJson, postForm, postJson } from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
@@ -50,6 +51,7 @@ import {
   formatJournalDateKey,
   formatPercent,
   formatPnl,
+  formatPnlCompact,
   formatQuantity,
   formatRatio,
   formatTicks,
@@ -197,6 +199,9 @@ export default function JournalScreen() {
   const [viewedMonth, setViewedMonth] = useState(cached?.calendar?.month ?? todayKey().slice(0, 7))
   const [serverTradeJournal, setServerTradeJournal] = useState<TradeJournal | undefined>(cached?.tradeJournal)
   const [serverCalendar, setServerCalendar] = useState<TradeCalendarMonthView | undefined>(cached?.calendar)
+  const [calendarView, setCalendarView] = useState<'grid' | 'list'>(
+    () => (storage.getItem('journal:calendar:view') as 'grid' | 'list') ?? 'list',
+  )
   const [serverJournalDays, setServerJournalDays] = useState<Record<string, TradeJournalDay> | undefined>(cached?.journalDays)
 
   const tradeJournal = serverTradeJournal
@@ -751,6 +756,18 @@ export default function JournalScreen() {
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>{calendarMonthLabel(viewedMonth)}</Text>
             <View style={{ flexDirection: 'row', gap: 4 }}>
+              <Button
+                small
+                variant="ghost"
+                title={calendarView === 'grid' ? '≡' : '▦'}
+                onPress={() => {
+                  setCalendarView((v) => {
+                    const next = v === 'grid' ? 'list' : 'grid'
+                    storage.setItem('journal:calendar:view', next)
+                    return next
+                  })
+                }}
+              />
               <Button small variant="ghost" title="‹" onPress={() => setViewedMonth((m) => shiftMonthKey(m, -1))} />
               <Button small variant="ghost" title="›" onPress={() => setViewedMonth((m) => shiftMonthKey(m, 1))} />
               <Button small variant="ghost" title="+" onPress={() => setShowManualTrade(true)} />
@@ -764,12 +781,52 @@ export default function JournalScreen() {
             {formatPnl(filteredCalendar.summary.realizedDollarsCents)}
           </Text>
         </View>
-        <View style={styles.calendarHeader}>
+        {calendarView === 'list' ? (
+          <View>
+            {[...filteredCalendar.days]
+              .filter((d) => d.closedCount > 0)
+              .sort((a, b) => b.date.localeCompare(a.date))
+              .map((day) => {
+                const isBeDay = day.netTicksCents === 0 && day.closedCount > 0
+                const numerology = getDeepLifePath(day.date)
+                return (
+                  <Pressable
+                    key={day.date}
+                    onPress={() => setSelectedDay(journalDays?.[day.date] ?? null)}
+                    style={styles.dayListRow}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.dayListDate}>
+                        {formatJournalDateKey(day.date)}{' '}
+                        <Text style={styles.dayListLp}>LP{numerology.lifePathNumber}</Text>
+                      </Text>
+                      <Text style={styles.daySub}>
+                        {day.closedCount}t{' '}
+                        <Text style={{ color: colors.positive }}>{day.wins}</Text>/
+                        <Text style={{ color: colors.negative }}>{day.losses}</Text>
+                        {' '}· {formatPercent(day.winRate)}
+                      </Text>
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={[styles.dayListPnl, { color: isBeDay ? colors.positive : pnlColor(day.realizedDollarsCents) }]}>
+                        {formatPnl(day.realizedDollarsCents)}
+                      </Text>
+                      <Text style={styles.daySub}>{formatTicks(day.netTicksCents)}</Text>
+                    </View>
+                  </Pressable>
+                )
+              })}
+            {filteredCalendar.days.filter((d) => d.closedCount > 0).length === 0 ? (
+              <Text style={[styles.dim, { paddingVertical: 12, textAlign: 'center' }]}>No trades this month.</Text>
+            ) : null}
+          </View>
+        ) : null}
+        {calendarView === 'grid' ? <View style={styles.calendarHeader}>
           {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
             <Text key={i} style={styles.calendarHeaderCell}>{d}</Text>
           ))}
-        </View>
-        <View style={styles.calendarGrid}>
+        </View> : null}
+        {calendarView === 'grid' ? <View style={styles.calendarGrid}>
           {(() => {
             const [year, mon] = filteredCalendar.month.split('-').map(Number)
             if (!year) return null
@@ -789,8 +846,8 @@ export default function JournalScreen() {
                 <View key={`off-${i}`} style={[styles.dayCell, styles.dayCellOff]}>
                   <Text style={styles.dayNumOff}>{dayNumber}</Text>
                   {day ? (
-                    <Text style={[styles.dayPnl, { color: pnlColor(day.realizedDollarsCents) }]}>
-                      {formatPnl(day.realizedDollarsCents)}
+                    <Text style={[styles.dayPnl, { color: pnlColor(day.realizedDollarsCents) }]} numberOfLines={1}>
+                      {formatPnlCompact(day.realizedDollarsCents)}
                     </Text>
                   ) : null}
                 </View>,
@@ -823,16 +880,9 @@ export default function JournalScreen() {
                     <Text style={styles.dayLp}>LP{numerology.lifePathNumber}</Text>
                   </View>
                   {hasTrades && day ? (
-                    <>
-                      <Text style={[styles.dayPnl, { color: isBeDay ? colors.positive : pnlColor(day.realizedDollarsCents) }]}>
-                        {formatPnl(day.realizedDollarsCents)}
-                      </Text>
-                      <Text style={styles.daySub}>{day.closedCount} trades</Text>
-                      <Text style={styles.daySub}>
-                        W/L <Text style={{ color: colors.positive }}>{day.wins}</Text>/
-                        <Text style={{ color: colors.negative }}>{day.losses}</Text>
-                      </Text>
-                    </>
+                    <Text numberOfLines={1} style={[styles.dayPnl, { color: isBeDay ? colors.positive : pnlColor(day.realizedDollarsCents) }]}>
+                      {formatPnlCompact(day.realizedDollarsCents)}
+                    </Text>
                   ) : dateKey <= todayKey() ? (
                     <Text style={styles.daySub}>·</Text>
                   ) : null}
@@ -841,7 +891,7 @@ export default function JournalScreen() {
             }
             return cells
           })()}
-        </View>
+        </View> : null}
       </CollapsibleSection>
 
       {/* Open Orders */}
@@ -1104,7 +1154,7 @@ export default function JournalScreen() {
       {/* Day detail modal */}
       <Modal visible={selectedDay != null} animationType="slide" transparent onRequestClose={() => setSelectedDay(null)}>
         <View style={styles.modalBackdrop}>
-          <ScrollView contentContainerStyle={{ padding: 16 }}>
+          <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 64, paddingBottom: 48 }}>
             {selectedDay ? (
               <Card title={formatJournalDateKey(selectedDay.date)}>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 10 }}>
@@ -1275,7 +1325,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     textAlign: 'center',
-    width: `${100 / 7}%`,
+    width: '13.5%',
   },
   chip: {
     backgroundColor: colors.bg,
@@ -1291,21 +1341,31 @@ const styles = StyleSheet.create({
   container: { backgroundColor: colors.bg, flex: 1 },
   content: { padding: 12, paddingBottom: 40 },
   dayCell: {
-    borderColor: colors.border,
-    borderRadius: 8,
-    borderWidth: 1,
-    marginBottom: 4,
-    minHeight: 74,
-    padding: 4,
-    width: `${100 / 7}%`,
+    borderColor: colors.borderLight,
+    borderRadius: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginBottom: 3,
+    minHeight: 44,
+    padding: 3,
+    width: '13.5%',
   },
   dayCellOff: { borderStyle: 'dashed', opacity: 0.4 },
   dayCellToday: { borderColor: colors.accent },
-  dayLp: { color: colors.accent, fontSize: 8, fontWeight: '600' },
+  dayLp: { color: colors.accent, fontSize: 7, fontWeight: '600' },
   dayNum: { color: colors.text, fontSize: 12, fontWeight: '700' },
   dayNumOff: { color: colors.faint, fontSize: 12, fontWeight: '700' },
-  dayPnl: { fontSize: 10, fontWeight: '700', marginTop: 2 },
-  daySub: { color: colors.muted, fontSize: 10 },
+  dayListDate: { color: colors.text, fontSize: 13, fontWeight: '700' },
+  dayListLp: { color: '#a855f7', fontSize: 11, fontWeight: '700' },
+  dayListPnl: { fontSize: 14, fontWeight: '800' },
+  dayListRow: {
+    alignItems: 'center',
+    borderBottomColor: colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    paddingVertical: 9,
+  },
+  dayPnl: { fontSize: 9, fontWeight: '700', marginTop: 1 },
+  daySub: { color: colors.muted, fontSize: 8 },
   dim: { color: colors.muted, fontSize: 13 },
   filledDot: {
     backgroundColor: '#34d399',

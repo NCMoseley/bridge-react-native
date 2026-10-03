@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import {
   ActivityIndicator,
+  Platform,
   Modal,
   Pressable,
   ScrollView,
@@ -10,6 +11,7 @@ import {
   View,
 } from 'react-native'
 import type { StyleProp, TextStyle, ViewStyle } from 'react-native'
+import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
 import Svg, { Circle, Path } from 'react-native-svg'
 import { storage } from '../utils/storage'
 
@@ -18,6 +20,7 @@ export const colors = {
   card: '#0f172a',
   cardAlt: '#111c34',
   border: '#1e293b',
+  borderLight: '#334155',
   text: '#e2e8f0',
   muted: '#94a3b8',
   faint: '#64748b',
@@ -49,10 +52,10 @@ export function Card({
   style?: StyleProp<ViewStyle>
 }) {
   return (
-    <View style={[styles.card, style]}>
+    <GlassSurface style={[styles.card, style]}>
       {title ? <Text style={styles.cardTitle}>{title}</Text> : null}
       {children}
-    </View>
+    </GlassSurface>
   )
 }
 
@@ -342,14 +345,14 @@ export function CollapsibleSection({
     })
   }
   return (
-    <View style={[styles.card, style]}>
+    <GlassSurface style={[styles.card, style]}>
       <Pressable onPress={toggle} style={styles.collapsibleHeader}>
         <View style={{ flex: 1, minWidth: 0 }}>{title}</View>
         {actions}
         <Text style={styles.collapsibleToggle}>{isOpen ? '−' : '+'}</Text>
       </Pressable>
       {isOpen ? <View style={styles.collapsibleBody}>{children}</View> : null}
-    </View>
+    </GlassSurface>
   )
 }
 
@@ -649,4 +652,95 @@ const styles = StyleSheet.create({
   stat: { minWidth: '30%', paddingVertical: 4 },
   statLabel: { color: colors.muted, fontSize: 11, marginBottom: 2 },
   statValue: { color: colors.text, fontSize: 16, fontWeight: '600' },
+})
+
+const GLASS_AVAILABLE = Platform.OS === 'ios' && isLiquidGlassAvailable()
+
+export function GlassSurface({
+  tint,
+  style,
+  children,
+}: {
+  tint?: string
+  style?: StyleProp<ViewStyle>
+  children: React.ReactNode
+}) {
+  if (GLASS_AVAILABLE) {
+    return (
+      <GlassView
+        glassEffectStyle="regular"
+        tintColor={tint}
+        colorScheme="dark"
+        style={[style, glassSurfaceStyles.glass]}
+      >
+        {children}
+      </GlassView>
+    )
+  }
+  return <View style={style}>{children}</View>
+}
+
+const glassSurfaceStyles = StyleSheet.create({
+  glass: {
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+  },
+})
+
+export function GlassDayCell({
+  tint,
+  style,
+  onPress,
+  onLongPress,
+  disabled,
+  children,
+}: {
+  tint?: string
+  style?: StyleProp<ViewStyle>
+  onPress?: () => void
+  onLongPress?: () => void
+  disabled?: boolean
+  children: React.ReactNode
+}) {
+  if (GLASS_AVAILABLE) {
+    return (
+      <GlassView
+        glassEffectStyle="regular"
+        tintColor={tint}
+        colorScheme="dark"
+        style={[glassCellStyles.cell, style]}
+      >
+        <Pressable disabled={disabled} onPress={onPress} onLongPress={onLongPress} style={glassCellStyles.inner}>
+          {children}
+        </Pressable>
+      </GlassView>
+    )
+  }
+  return (
+    <Pressable
+      disabled={disabled}
+      onPress={onPress}
+      onLongPress={onLongPress}
+      style={[glassCellStyles.cell, glassCellStyles.fallback, tint ? { borderColor: tint } : null, style]}
+    >
+      {children}
+    </Pressable>
+  )
+}
+
+const glassCellStyles = StyleSheet.create({
+  cell: {
+    borderRadius: 10,
+    marginBottom: 3,
+    minHeight: 48,
+    overflow: 'hidden',
+    padding: 3,
+    width: '13.5%',
+  },
+  fallback: {
+    backgroundColor: colors.card,
+    borderColor: colors.borderLight,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  inner: { flex: 1 },
 })

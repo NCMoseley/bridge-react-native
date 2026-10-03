@@ -9,8 +9,8 @@ import {
   View,
 } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
-import { getJson, postForm, postJson } from '../api/client'
-import { useToast } from '../context/ToastContext'
+import { getJson, postForm, postJson } from '../../api/client'
+import { useToast } from '../../context/ToastContext'
 import {
   Button,
   Card,
@@ -18,16 +18,16 @@ import {
   Input,
   SelectPicker,
   colors,
-} from '../components/ui'
-import { monthRangeFromHtml } from '../utils/forex-factory'
-import { isAlertSoundEnabled, setAlertSoundEnabled } from '../utils/alertSound'
-import { getCachedSettings, setCachedSettings } from '../utils/settings-cache'
+} from '../../components/ui'
+import { monthRangeFromHtml } from '../../utils/forex-factory'
+import { isAlertSoundEnabled, setAlertSoundEnabled } from '../../utils/alertSound'
+import { getCachedSettings, setCachedSettings } from '../../utils/settings-cache'
 import type {
   BridgeAccount,
   RangeRoute,
   RangeSubcategory,
   RangeSubcategoryAssignment,
-} from '../types'
+} from '../../types'
 
 interface RouteEdit {
   id: string

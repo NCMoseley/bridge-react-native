@@ -10,7 +10,7 @@ import {
   JOURNAL_TIME_ZONE,
  formatJournalDate } from '../utils/format'
 import type { AccountJournal, CalendarDay, JournalMetrics, TradeStats } from '../types'
-import { colors, pnlColor, RingChart, toneForCents } from './ui'
+import { colors, pnlColor, RingChart, toneForCents, GlassSurface } from './ui'
 
 // ---- JournalDate ----
 
@@ -60,15 +60,16 @@ export function DailyCumulativeChart({
   const xLabels = useMemo(() => {
     if (data.length === 0) return []
     const mid = Math.floor(data.length / 2)
-    return [
-      { day: data[0].day, index: 0 },
-      { day: data[mid].day, index: mid },
-      { day: data[data.length - 1].day, index: data.length - 1 },
+    const labels = [
+      { day: data[0].day, index: 0, date: data[0].date },
+      { day: data[mid].day, index: mid, date: data[mid].date },
+      { day: data[data.length - 1].day, index: data.length - 1, date: data[data.length - 1].date },
     ]
+    return labels.filter((l, i) => labels.findIndex((o) => o.index === l.index) === i)
   }, [data])
 
   return (
-    <View style={chartStyles.panel}>
+    <GlassSurface style={chartStyles.panel}>
       <View style={chartStyles.headerRow}>
         <View style={{ flex: 1 }}>
           <Text style={chartStyles.title}>Daily net cumulative P&L</Text>
@@ -101,7 +102,7 @@ export function DailyCumulativeChart({
         })}
         {xLabels.map((label) => (
           <SvgText
-            key={label.day}
+            key={label.date}
             x={padding.left + (label.index / total) * plotWidth}
             y={height - padding.bottom + 24}
             textAnchor="middle"
@@ -117,7 +118,7 @@ export function DailyCumulativeChart({
           <Circle key={i} cx={p.x} cy={p.y} r={1.75} fill={curveColor} />
         ))}
       </Svg>
-    </View>
+    </GlassSurface>
   )
 }
 
@@ -133,7 +134,7 @@ export function MonthlyPerformanceMix({
   activeDays: number
 }) {
   return (
-    <View style={chartStyles.panel}>
+    <GlassSurface style={chartStyles.panel}>
       <Text style={chartStyles.title}>Monthly Performance</Text>
       <Text style={chartStyles.subtitle}>Quick read on this month&apos;s trade distribution and averages.</Text>
       <View style={{ alignItems: 'center', flexDirection: 'row', gap: 16, marginVertical: 12 }}>
@@ -168,7 +169,7 @@ export function MonthlyPerformanceMix({
         <Text style={chartStyles.chip}>Decisive trades {month.closedCount}</Text>
         <Text style={chartStyles.chip}>Active days {activeDays}</Text>
       </View>
-    </View>
+    </GlassSurface>
   )
 }
 
@@ -256,15 +257,15 @@ export function ModelEquityChart({
 
   if (data.length === 0) {
     return (
-      <View style={[chartStyles.panel, { marginTop: 8 }]}>
+      <GlassSurface style={[chartStyles.panel, { marginTop: 8 }]}>
         {windowSelector ? <View style={{ alignItems: 'flex-end', marginBottom: 4 }}>{windowSelector}</View> : null}
         <Text style={chartStyles.subtitle}>No closed trades in the last {windowDays} days.</Text>
-      </View>
+    </GlassSurface>
     )
   }
 
   return (
-    <View style={[chartStyles.panel, { marginTop: 8 }]}>
+    <GlassSurface style={[chartStyles.panel, { marginTop: 8 }]}>
       <View style={chartStyles.headerRow}>
         <View style={{ flex: 1 }}>
           <Text style={chartStyles.titleSmall}>{model} — {windowDays}-day equity</Text>
@@ -299,7 +300,7 @@ export function ModelEquityChart({
           <Circle key={i} cx={p.x} cy={p.y} r={1.75} fill={curveColor} />
         ))}
       </Svg>
-    </View>
+    </GlassSurface>
   )
 }
 
@@ -341,14 +342,14 @@ const PERF_COLUMNS: {
 export function AccountPerformanceChart({ accounts }: { accounts: AccountJournal[] }) {
   if (!accounts.length) {
     return (
-      <View style={chartStyles.panel}>
+      <GlassSurface style={chartStyles.panel}>
         <Text style={chartStyles.subtitle}>No account performance to chart yet.</Text>
-      </View>
+    </GlassSurface>
     )
   }
   return (
     <ScrollView horizontal>
-      <View style={chartStyles.panel}>
+      <GlassSurface style={chartStyles.panel}>
         <View style={chartStyles.tableHeader}>
           <Text style={[chartStyles.tableHeaderCell, { width: 110, textAlign: 'left' }]}>Account</Text>
           {PERF_COLUMNS.map((c) => (
@@ -367,7 +368,7 @@ export function AccountPerformanceChart({ accounts }: { accounts: AccountJournal
             ))}
           </View>
         ))}
-      </View>
+      </GlassSurface>
     </ScrollView>
   )
 }
