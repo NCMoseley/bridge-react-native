@@ -1,21 +1,35 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Stack, useRouter, useSegments } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { AuthProvider, useAuth } from '../context/AuthContext'
 import { ToastProvider } from '../context/ToastContext'
-import { colors } from '../components/ui'
+import { colors, Spinner } from '../components/ui'
+import { hydrateStorage } from '../utils/storage'
 
 function AuthGate() {
+  const [hydrated, setHydrated] = useState(false)
+  useEffect(() => {
+    void hydrateStorage().then(() => setHydrated(true))
+  }, [])
   const { user, loading } = useAuth()
   const segments = useSegments()
   const router = useRouter()
 
   useEffect(() => {
-    if (loading) return
+    if (!hydrated || loading) return
     const inLogin = segments[0] === 'login'
     if (!user && !inLogin) router.replace('/login')
     else if (user && inLogin) router.replace('/')
   }, [user, loading, segments])
+
+  if (!hydrated) {
+    return (
+      <>
+        <StatusBar style="light" />
+        <Spinner />
+      </>
+    )
+  }
 
   return (
     <>
