@@ -43,10 +43,9 @@ function AuthGate() {
       >
         <Stack.Screen name="login" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="ranges" options={{ title: 'Ranges' }} />
         <Stack.Screen
           name="range-calendar"
-          options={{ title: 'Range Calendar' }}
+          options={{ title: 'Range Review' }}
         />
         <Stack.Screen
           name="category-calendar"

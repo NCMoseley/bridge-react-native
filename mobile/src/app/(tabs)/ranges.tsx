@@ -9,10 +9,10 @@ import {
   View,
 } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { getJson, postForm, postJson } from '../api/client'
-import { useAuth } from '../context/AuthContext'
-import { useToast } from '../context/ToastContext'
-import { onEvent } from '../utils/events'
+import { getJson, postForm, postJson } from '../../api/client'
+import { useAuth } from '../../context/AuthContext'
+import { useToast } from '../../context/ToastContext'
+import { onEvent } from '../../utils/events'
 import {
   Badge,
   Button,
@@ -24,10 +24,10 @@ import {
   colors,
   pnlColor,
   toneForCents,
-} from '../components/ui'
-import { EquityChart } from '../components/charts'
-import { RangeDetailCard } from '../components/RangeDetailCard'
-import { RedFolderMiniCalendar, RedFolderPanel } from '../components/RedFolder'
+} from '../../components/ui'
+import { EquityChart } from '../../components/charts'
+import { RangeDetailCard } from '../../components/RangeDetailCard'
+import { RedFolderMiniCalendar, RedFolderPanel } from '../../components/RedFolder'
 import {
   buildRangeDaySchedule,
   currentJournalDateKey,
@@ -38,23 +38,23 @@ import {
   journalDateFromKey,
   rangeRunsOnWeekday,
   type RangeDaySchedule,
-} from '../utils/ranges'
-import { classForCents as _cls, formatPnl, formatTicks } from '../utils/format'
-import { getDeepLifePath } from '../utils/numerology'
+} from '../../utils/ranges'
+import { classForCents as _cls, formatPnl, formatTicks } from '../../utils/format'
+import { getDeepLifePath } from '../../utils/numerology'
 import {
   getCachedRanges,
   getCachedRangesOptimistic,
   RANGES_CACHE_TTL_MS,
   setCachedRanges,
-} from '../utils/ranges-cache'
-import { modelColor } from '../utils/model-color'
+} from '../../utils/ranges-cache'
+import { modelColor } from '../../utils/model-color'
 import type {
   RangeConfiguration,
   RangeSubcategory,
   RangeSubcategoryAssignment,
   SharedRangeDetail,
   SharedRangeSubscription,
-} from '../types'
+} from '../../types'
 
 const HIGHLIGHT_CLOSE_MS = 30 * 60 * 1000
 

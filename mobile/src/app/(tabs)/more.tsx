@@ -4,9 +4,7 @@ import { useAuth } from '../../context/AuthContext'
 import { colors } from '../../components/ui'
 
 const LINKS = [
-  { href: '/ranges', label: 'Ranges', desc: 'Tracked ranges, models, performance' },
-  { href: '/order-review', label: 'Order Review', desc: 'Extension order drafts queue' },
-  { href: '/range-calendar', label: 'Range Calendar', desc: 'Per-range monthly P&L' },
+  { href: '/range-calendar', label: 'Range Review', desc: 'Per-range monthly P&L' },
   { href: '/category-calendar', label: 'Category Calendar', desc: 'Per-model monthly P&L' },
   { href: '/settings', label: 'Settings', desc: 'Route subscriptions & extension' },
 ] as const

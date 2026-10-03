@@ -27,7 +27,8 @@ export default function TabsLayout() {
       <Tabs.Screen name="index" options={{ title: 'Journal' }} />
       <Tabs.Screen name="accounts" options={{ title: 'Accounts' }} />
       <Tabs.Screen name="order-review" options={{ title: 'Order Review' }} />
-      <Tabs.Screen name="settings" options={{ title: 'Settings' }} />
+      <Tabs.Screen name="ranges" options={{ title: 'Ranges' }} />
+      <Tabs.Screen name="settings" options={{ href: null }} />
       <Tabs.Screen name="alerts" options={{ href: null }} />
       <Tabs.Screen name="monitoring" options={{ href: null }} />
       <Tabs.Screen name="more" options={{ title: 'More' }} />
