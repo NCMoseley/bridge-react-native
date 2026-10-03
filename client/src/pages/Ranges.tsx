@@ -22,7 +22,7 @@ import {
   type RangeDaySchedule,
   type RangeScheduleState,
 } from '../utils/ranges'
-import { tradingViewInstrumentIconUrl } from '../utils/instruments'
+import { isCryptoFutureInstrument, tradingViewInstrumentIconUrl } from '../utils/instruments'
 import {
   classForCents,
   formatPnl,
@@ -434,6 +434,7 @@ function RangeCategorySection({
   ranges,
   assignments,
   subcategories,
+  configs,
   open,
   onToggle,
   onBulkDays,
@@ -445,6 +446,7 @@ function RangeCategorySection({
   ranges: SharedRangeDetail[]
   assignments: RangeSubcategoryAssignment[]
   subcategories: RangeSubcategory[]
+  configs: Map<string, RangeConfiguration>
   open: boolean
   onToggle: (anchor?: HTMLElement) => void
   onBulkDays: (enabled: boolean) => void
@@ -489,7 +491,11 @@ function RangeCategorySection({
       const a = assignments.find(
         (x) => x.rangeName === range.rangeName && x.subcategoryName === category,
       )
-      return a ? flags.every((flag) => a[flag] === true) : false
+      if (!a) return false
+      const crypto = isCryptoFutureInstrument(configs.get(range.rangeName)?.instrument)
+      return flags.every((flag) =>
+        flag === 'runSaturday' ? a[flag] === crypto : a[flag] === true,
+      )
     })
     const disabled = ranges.length > 0 && ranges.every((range) => {
       const a = assignments.find(
@@ -498,7 +504,7 @@ function RangeCategorySection({
       return a ? flags.every((flag) => a[flag] === false) : false
     })
     return { enabled, disabled }
-  }, [ranges, assignments, category])
+  }, [ranges, assignments, category, configs])
   const allDaysEnabled = modelDayFlags.enabled
   const allDaysDisabled = modelDayFlags.disabled
 
@@ -736,20 +742,23 @@ export function SubscriptionBadges({
       {filtered.map((sub) => (
         <span
           key={`${sub.account.id}-${sub.user.id}`}
-          className="inline-flex items-center gap-1 rounded border border-slate-700 bg-slate-950 px-2 py-0.5 text-slate-300"
+          className="inline-flex items-center gap-1.5 rounded-full border border-slate-600 bg-slate-900 px-2.5 py-1 text-xs text-slate-200"
         >
           {sub.account.name}
-          {sub.extensionEnabled && (
-            <span className="rounded bg-indigo-900 px-1 text-[10px] text-indigo-100">
-              Ext
-            </span>
-          )}
           {sub.traderspostEnabled && (
             <span
-              className="rounded bg-positive-900 px-1 text-[10px] text-positive-100"
+              className="rounded bg-indigo-600 px-1 text-[10px] font-bold text-white"
               title={sub.crossTradeEnabled ? 'CrossTrade routing' : 'TradersPost routing'}
             >
               {sub.crossTradeEnabled ? 'CT' : 'TP'}
+            </span>
+          )}
+          {sub.extensionEnabled && (
+            <span
+              className="rounded bg-indigo-600 px-1 text-[10px] font-bold text-white"
+              title="Extension drafts"
+            >
+              EXT
             </span>
           )}
         </span>
@@ -1918,7 +1927,7 @@ export function RangesPage() {
                 runWednesday: enabled,
                 runThursday: enabled,
                 runFriday: enabled,
-                runSaturday: enabled,
+                runSaturday: enabled && isCryptoFutureInstrument(configs.get(a.rangeName)?.instrument),
                 runSunday: enabled,
                 updatedAt: new Date().toISOString(),
               }
@@ -1939,7 +1948,7 @@ export function RangesPage() {
             runWednesday: enabled,
             runThursday: enabled,
             runFriday: enabled,
-            runSaturday: enabled,
+            runSaturday: enabled && isCryptoFutureInstrument(current.instrument),
             runSunday: enabled,
             updatedAt: new Date().toISOString(),
           })
@@ -2365,6 +2374,7 @@ export function RangesPage() {
             ranges={ranges}
             assignments={assignments}
             subcategories={subcategories}
+            configs={configs}
             open={openCategory === category}
             onToggle={(anchor) => toggleRangeCategory(category, anchor)}
             onBulkDays={(enabled) => handleBulkDays(category, enabled)}

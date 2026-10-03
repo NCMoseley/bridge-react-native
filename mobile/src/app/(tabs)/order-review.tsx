@@ -30,18 +30,20 @@ type DraftAction = 'submitted' | 'rejected' | 'reviewed' | 'resend'
 const DEFAULT_SINCE_HOURS = 72
 const RECENT_DRAFT_LIMIT = 25
 
+// Getters — `colors` mutates in place on theme change, so module-level
+// captures would bake the boot palette forever.
 const STATUS_COLORS: Record<DraftStatus, string> = {
-  pending: colors.amber,
-  reviewed: colors.accent,
-  submitted: colors.positive,
-  rejected: colors.negative,
-  expired: colors.muted,
+  get pending() { return colors.amber },
+  get reviewed() { return colors.accent },
+  get submitted() { return colors.positive },
+  get rejected() { return colors.negative },
+  get expired() { return colors.muted },
 }
 
 const HEADING_COLORS: Record<OrderDraft['action'], string> = {
-  buy: colors.positive,
-  sell: colors.negative,
-  cancel: colors.amber,
+  get buy() { return colors.positive },
+  get sell() { return colors.negative },
+  get cancel() { return colors.amber },
 }
 
 function CopyButton({ value }: { value: string }) {

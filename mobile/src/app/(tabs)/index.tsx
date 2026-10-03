@@ -991,7 +991,7 @@ export default function JournalScreen() {
                   <View style={styles.openCardHeader}>
                     <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       <Pressable onPress={() => router.push(`/range-calendar?range=${encodeURIComponent(rangeName)}`)}>
-                        <Text style={[styles.openCardTitle, hasFilled && { color: '#6ee7b7' }]}>{rangeName}</Text>
+                        <Text style={[styles.openCardTitle, hasFilled && { color: colors.positive }]}>{rangeName}</Text>
                       </Pressable>
                       <Text style={styles.daySub}>{displayInstrument(instrument)}</Text>
                     </View>
@@ -1399,7 +1399,7 @@ const styles = themedStyles((c) => StyleSheet.create({
   daySub: { color: c.muted, fontSize: 8 },
   dim: { color: c.muted, fontSize: 13 },
   filledDot: {
-    backgroundColor: '#34d399',
+    backgroundColor: c.positive,
     borderRadius: 4,
     height: 8,
     marginRight: 6,

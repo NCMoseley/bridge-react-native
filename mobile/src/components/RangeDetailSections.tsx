@@ -363,22 +363,16 @@ export function RangeDetailSections({
                     {detail.subscriptions.map((s) => (
                       <View key={s.accountId} style={styles.subChip}>
                         <Text style={styles.value}>{s.accountName}</Text>
-                        <Text
-                          style={[
-                            styles.subTag,
-                            s.traderspostEnabled ? styles.subTagOn : styles.subTagOff,
-                          ]}
-                        >
-                          {s.crossTrade ? 'CT' : 'TP'}
-                        </Text>
-                        <Text
-                          style={[
-                            styles.subTag,
-                            s.extensionEnabled ? styles.subTagOn : styles.subTagOff,
-                          ]}
-                        >
-                          EXT
-                        </Text>
+                        {s.traderspostEnabled ? (
+                          <Text style={[styles.subTag, styles.subTagOn]}>
+                            {s.crossTrade ? 'CT' : 'TP'}
+                          </Text>
+                        ) : null}
+                        {s.extensionEnabled ? (
+                          <Text style={[styles.subTag, styles.subTagOn]}>
+                            EXT
+                          </Text>
+                        ) : null}
                       </View>
                     ))}
                   </View>
@@ -633,8 +627,7 @@ const styles = themedStyles((c) => StyleSheet.create({
     paddingVertical: 5,
   },
   subTag: { borderRadius: 3, fontSize: 9, fontWeight: '800', overflow: 'hidden', paddingHorizontal: 4 },
-  subTagOff: { color: c.faint },
-  subTagOn: { backgroundColor: '#4f46e5', color: '#fff' },
+  subTagOn: { backgroundColor: c.accent, color: '#fff' },
   value: { color: c.text, fontSize: 13, fontWeight: '600' },
   warnBox: {
     backgroundColor: 'rgba(251,191,36,0.12)',

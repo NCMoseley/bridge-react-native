@@ -18,7 +18,8 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.nate.bridge"
+      "package": "com.nate.bridge",
+      "versionCode": 3
     },
     "web": {
       "favicon": "./assets/favicon.png"

@@ -1,5 +1,11 @@
 # Project Notes for AI Assistants
 
+## Sibling Repo: bridge-react-native
+
+- `~/Desktop/bridge-react-native` is a sibling copy of this repo plus a `mobile/` Expo app. For the foreseeable, **every change made here must also be applied there** (and vice versa): copy the updated shared files (`src/`, `client/src/`, `scripts/`, `docs/`, `AGENTS.md`) and mirror UI changes in `mobile/` where an equivalent screen exists.
+- The repos share no git history — the RN repo is a snapshot. Its `server.ts`/`database.ts` may carry RN-only local work (e.g. `hasBridgeLogEntry`); diff before copying and never overwrite RN-only additions.
+- After syncing, run server + client typechecks in both repos (`npx tsc -p tsconfig.json --noEmit`, `cd client && npx tsc -p tsconfig.app.json --noEmit`; `npx tsc --noEmit` inside `mobile/`).
+
 ## Mock TradersPost Endpoint (e2e testing)
 
 - `POST /mock/traderspost` is a built-in mock broker receiver, registered only when `NODE_ENV !== 'production'`. Point an account destination's webhook URL at `http://localhost:3000/mock/traderspost` to run the `scripts/0X-*.sh` Pine test scripts end-to-end without a real TradersPost account.

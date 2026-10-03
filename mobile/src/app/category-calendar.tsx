@@ -308,7 +308,7 @@ export default function CategoryCalendarScreen() {
                       }
                       style={[styles.chip, checked && styles.chipActive]}
                     >
-                      <Text style={[styles.chipText, checked && { color: '#a5b4fc' }]}>{rangeName}</Text>
+                      <Text style={[styles.chipText, checked && { color: colors.accent }]}>{rangeName}</Text>
                     </Pressable>
                   )
                 })}
@@ -516,7 +516,7 @@ const styles = themedStyles((c) => StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
   },
-  chipActive: { backgroundColor: 'rgba(99,102,241,0.12)', borderColor: '#6366f1' },
+  chipActive: { backgroundColor: hexToRgba(c.accent, 0.12), borderColor: c.accent },
   chipText: { color: c.muted, fontSize: 11 },
   container: { backgroundColor: c.bg, flex: 1 },
   dayCell: {
@@ -537,7 +537,7 @@ const styles = themedStyles((c) => StyleSheet.create({
   dimSmall: { color: c.muted, fontSize: 11 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 3 },
   gridHeader: { color: c.faint, fontSize: 10, fontWeight: '700', textAlign: 'center', width: '13.5%' },
-  lp: { color: '#a5b4fc', fontSize: 9, fontWeight: '700' },
+  lp: { color: c.accent, fontSize: 9, fontWeight: '700' },
   metricBig: { color: c.text, fontSize: 20, fontWeight: '800' },
   metricsGrid: { gap: 8, marginBottom: 8 },
   metricsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 14, marginVertical: 8 },

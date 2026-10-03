@@ -101,7 +101,7 @@ function statusIcon(alert: AlertFeedEntry): string {
 }
 
 function statusColor(alert: AlertFeedEntry): string {
-  if (alert.tradeEventCount > 0) return '#a5b4fc'
+  if (alert.tradeEventCount > 0) return colors.accent
   if (alert.deliveryCount === 0) return colors.faint
   if (alert.traderspostFailedCount > 0) return colors.negative
   if (alert.traderspostPendingCount > 0) return colors.amber

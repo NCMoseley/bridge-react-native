@@ -2880,11 +2880,15 @@ export class Database {
     const placeholders = rangeNames.map(() => '?').join(',');
     const run = enabled ? 1 : 0;
     const now = new Date().toISOString();
-    // Ranges without a configuration row are skipped by the UPDATE — report the
-    // real change count so the client can flag them instead of claiming success.
+    // Enabling maps to the futures week (Sun 18:00 ET → Fri ~17:00): Saturday
+    // stays off except for crypto futures, which trade through the weekend.
     const result = this.db.prepare(
       `UPDATE range_configurations
-       SET run_monday = ?, run_tuesday = ?, run_wednesday = ?, run_thursday = ?, run_friday = ?, run_saturday = ?, run_sunday = ?, updated_at = ?
+       SET run_monday = ?, run_tuesday = ?, run_wednesday = ?, run_thursday = ?, run_friday = ?,
+           run_saturday = CASE WHEN ? = 0 THEN 0
+             WHEN substr(UPPER(COALESCE(instrument, '')), 1, 3) IN ('BTC', 'MBT', 'ETH', 'MET', 'SOL', 'XRP') THEN 1
+             ELSE 0 END,
+           run_sunday = ?, updated_at = ?
        WHERE range_name IN (${placeholders})`,
     ).run(run, run, run, run, run, run, run, now, ...rangeNames);
     this.syncRangeCalendarVisibilityWithSchedules(rangeNames, userId);
@@ -2899,10 +2903,20 @@ export class Database {
     const normalized = normalizeSubcategoryName(subcategoryName);
     if (!normalized || !this.subcategoryExists(normalized)) return { updated: 0, rangeNames: [] };
     const run = enabled ? 1 : 0;
+    // Enabling maps to the futures week (Sun 18:00 ET → Fri ~17:00): Saturday
+    // stays off except for crypto futures, which trade through the weekend.
     const result = this.db.prepare(
       `UPDATE range_subcategory_assignments
        SET run_monday = ?, run_tuesday = ?, run_wednesday = ?, run_thursday = ?,
-           run_friday = ?, run_saturday = ?, run_sunday = ?, updated_at = ?
+           run_friday = ?,
+           run_saturday = CASE WHEN ? = 0 THEN 0
+             WHEN EXISTS (
+               SELECT 1 FROM range_configurations cfg
+               WHERE cfg.range_name = range_subcategory_assignments.range_name COLLATE BINARY
+                 AND substr(UPPER(COALESCE(cfg.instrument, '')), 1, 3) IN ('BTC', 'MBT', 'ETH', 'MET', 'SOL', 'XRP')
+             ) THEN 1
+             ELSE 0 END,
+           run_sunday = ?, updated_at = ?
        WHERE subcategory_name = ? COLLATE BINARY`,
     ).run(run, run, run, run, run, run, run, new Date().toISOString(), normalized);
     const rangeNames = this.listSubcategoryRangeNames(normalized);
@@ -6168,6 +6182,28 @@ export class Database {
     return log;
   }
 
+  // Existence check over the JSON payload — used to dedup warn-once events
+  // across restarts (in-memory sets reset on boot; the log row persists).
+  hasBridgeLogEntry(input: {
+    userId: string;
+    category: string;
+    event?: string;
+    bracketId?: string;
+    since: string;
+  }): boolean {
+    return Boolean(this.db.prepare(
+      `SELECT 1 FROM bridge_logs
+       WHERE user_id = ? AND category = ? AND timestamp >= ?
+         AND (? IS NULL OR json_extract(data_json, '$.event') = ?)
+         AND (? IS NULL OR json_extract(data_json, '$.bracketId') = ?)
+       LIMIT 1`,
+    ).get(
+      input.userId, input.category, input.since,
+      input.event ?? null, input.event ?? null,
+      input.bracketId ?? null, input.bracketId ?? null,
+    ));
+  }
+
   listBridgeLogs(input: { userId: string; since: string; category?: string; limit?: number }): BridgeLog[] {
     const limit = input.limit ?? 1000;
     if (input.category) {
@@ -6188,17 +6224,6 @@ export class Database {
        LIMIT ?`,
     ).all(input.userId, input.since, limit) as unknown as BridgeLogRow[];
     return rows.map((row) => this.toBridgeLog(row));
-  }
-
-  hasBridgeLogEntry(input: { userId: string; category: string; event: string; bracketId: string; since: string }): boolean {
-    const row = this.db.prepare(
-      `SELECT 1 FROM bridge_logs
-       WHERE user_id = ? AND category = ? AND timestamp >= ?
-         AND json_extract(data_json, '$.event') = ?
-         AND json_extract(data_json, '$.bracketId') = ?
-       LIMIT 1`,
-    ).get(input.userId, input.category, input.since, input.event, input.bracketId);
-    return row != null;
   }
 
   private toBridgeLog(row: BridgeLogRow): BridgeLog {

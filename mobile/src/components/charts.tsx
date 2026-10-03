@@ -421,7 +421,7 @@ export function Utc4Clock() {
     <View style={{ alignItems: 'center', flexDirection: 'row', gap: 6 }}>
       <View
         style={{
-          backgroundColor: marketClosed ? '#ef4444' : '#34d399',
+          backgroundColor: marketClosed ? colors.negative : colors.positive,
           borderRadius: 4,
           height: 8,
           width: 8,

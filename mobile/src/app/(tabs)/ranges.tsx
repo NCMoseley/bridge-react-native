@@ -22,6 +22,7 @@ import {
   GaugeChart,
   Input,
   colors,
+  hexToRgba,
   pnlColor,
   toneForCents,
   themedStyles,
@@ -85,14 +86,24 @@ export function SubscriptionBadges({
   const filtered = currentUserId ? subscriptions.filter((sub) => sub.user.id === currentUserId) : subscriptions
   if (filtered.length === 0) return <Text style={styles.dim}>No subscriptions</Text>
   return (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
       {filtered.map((sub) => (
         <View key={`${sub.account.id}-${sub.user.id}`} style={styles.subBadge}>
-          <Text style={styles.dimSmall}>
-            {sub.account.name}
-            {sub.extensionEnabled ? ' · Ext' : ''}
-            {sub.traderspostEnabled ? ' · TP' : ''}
-          </Text>
+          <Text style={styles.subBadgeName}>{sub.account.name}</Text>
+          {sub.traderspostEnabled ? (
+            <View style={[styles.subTag, styles.subTagOn]}>
+              <Text style={[styles.subTagText, styles.subTagTextOn]}>
+                {sub.crossTradeEnabled ? 'CT' : 'TP'}
+              </Text>
+            </View>
+          ) : null}
+          {sub.extensionEnabled ? (
+            <View style={[styles.subTag, styles.subTagOn]}>
+              <Text style={[styles.subTagText, styles.subTagTextOn]}>
+                EXT
+              </Text>
+            </View>
+          ) : null}
         </View>
       ))}
     </View>
@@ -227,7 +238,7 @@ function ModelDayButtons({
                   ? { borderColor: colors.border }
                   : { borderColor: colors.border, opacity: 0.5 }
                 : effective
-                  ? { borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.12)' }
+                  ? { borderColor: colors.accent, backgroundColor: hexToRgba(colors.accent, 0.12) }
                   : { borderColor: colors.border },
             ]}
           >
@@ -235,7 +246,7 @@ function ModelDayButtons({
               style={[
                 styles.modelDayText,
                 override != null && !effective && { textDecorationLine: 'line-through' },
-                override != null && effective && { color: '#a5b4fc' },
+                override != null && effective && { color: colors.accent },
               ]}
             >
               {label}
@@ -1171,7 +1182,7 @@ export default function RangesScreen() {
                       onPress={() => toggleCategory(cat)}
                       style={[styles.catChip, selectedCategories.has(cat) && styles.catChipActive]}
                     >
-                      <Text style={[styles.dimSmall, selectedCategories.has(cat) && { color: '#a5b4fc' }]}>{cat}</Text>
+                      <Text style={[styles.dimSmall, selectedCategories.has(cat) && { color: colors.accent }]}>{cat}</Text>
                     </Pressable>
                   ))}
                 <Button small title="✓" onPress={() => setAppliedCategories(new Set(selectedCategories))} />
@@ -1252,7 +1263,7 @@ export default function RangesScreen() {
                 style={[styles.catChip, selectedModels.has(s.name) && styles.catChipActive]}
               >
                 <View style={{ backgroundColor: modelColor(s.name, subcategories), borderRadius: 5, height: 10, width: 10 }} />
-                <Text style={[styles.dimSmall, selectedModels.has(s.name) && { color: '#a5b4fc' }]}>{s.name}</Text>
+                <Text style={[styles.dimSmall, selectedModels.has(s.name) && { color: colors.accent }]}>{s.name}</Text>
               </Pressable>
             ))}
           </View>
@@ -1344,7 +1355,7 @@ const styles = themedStyles((c) => StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
-  catChipActive: { backgroundColor: 'rgba(99,102,241,0.12)', borderColor: '#6366f1' },
+  catChipActive: { backgroundColor: hexToRgba(c.accent, 0.12), borderColor: c.accent },
   categoryCard: {
     backgroundColor: c.bg,
     borderColor: c.border,
@@ -1389,12 +1400,12 @@ const styles = themedStyles((c) => StyleSheet.create({
   },
   instrumentBadgeText: { color: c.text, fontSize: 10, fontWeight: '700' },
   lpBadge: {
-    backgroundColor: 'rgba(99,102,241,0.12)',
+    backgroundColor: hexToRgba(c.accent, 0.12),
     borderRadius: 4,
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
-  lpText: { color: '#818cf8', fontSize: 12, fontWeight: '700' },
+  lpText: { color: c.accent, fontSize: 12, fontWeight: '700' },
   modelDay: {
     borderColor: c.border,
     borderRadius: 4,
@@ -1482,13 +1493,26 @@ const styles = themedStyles((c) => StyleSheet.create({
   },
   sectionTitle: { color: c.text, fontSize: 15, fontWeight: '700' },
   subBadge: {
+    alignItems: 'center',
     backgroundColor: c.card,
-    borderColor: c.border,
+    borderColor: c.borderLight,
+    borderRadius: 999,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+  },
+  subBadgeName: { color: c.text, fontSize: 11 },
+  subTag: {
     borderRadius: 4,
     borderWidth: 1,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
   },
+  subTagOn: { backgroundColor: c.accent, borderColor: c.accent },
+  subTagText: { fontSize: 9, fontWeight: '800' },
+  subTagTextOn: { color: '#fff' },
   tickLabel: { fontSize: 11, fontWeight: '700', width: 70, textAlign: 'right' },
   tickTrack: {
     backgroundColor: c.card,
@@ -1511,6 +1535,6 @@ const styles = themedStyles((c) => StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
   },
-  viewToggleActive: { backgroundColor: 'rgba(99,102,241,0.2)' },
+  viewToggleActive: { backgroundColor: hexToRgba(c.accent, 0.2) },
   viewToggleText: { color: c.muted, fontSize: 11, fontWeight: '600' },
 }))

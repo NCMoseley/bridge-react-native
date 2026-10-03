@@ -921,10 +921,10 @@ const styles = themedStyles((c) => StyleSheet.create({
     flex: 1,
     padding: 10,
   },
-  modeCardActive: { borderColor: '#6366f1' },
+  modeCardActive: { borderColor: c.accent },
   modeRow: { flexDirection: 'row', gap: 8 },
   pnlBtn: {
-    backgroundColor: '#4f46e5',
+    backgroundColor: c.accent,
     borderRadius: 8,
     marginLeft: 8,
     paddingHorizontal: 10,

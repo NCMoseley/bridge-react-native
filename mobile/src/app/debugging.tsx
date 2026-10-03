@@ -1337,7 +1337,7 @@ export function DebuggingContent({ monitoringOnly = false }: { monitoringOnly?: 
               if (category === 'traderspost' && phase === 'request') return { text: 'REQ', color: '#60a5fa' }
               if (category === 'traderspost' && ok) return { text: 'OK', color: colors.positive }
               if (category === 'traderspost') return { text: 'ERR', color: colors.negative }
-              if (category === 'routing') return { text: 'ROUTE', color: '#a5b4fc' }
+              if (category === 'routing') return { text: 'ROUTE', color: colors.accent }
               if (category === 'lifecycle') return { text: 'LIFE', color: '#2dd4bf' }
               if (category === 'reapply') return { text: 'REAP', color: colors.amber }
               if (category === 'email') return { text: 'MAIL', color: colors.negative }

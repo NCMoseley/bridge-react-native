@@ -34,7 +34,8 @@ export const colors = {
 export function setTheme(name: ThemeName) {
   applyTheme(name, (p) => {
     for (const k of Object.keys(p) as (keyof Palette)[]) {
-      ;(colors as Record<string, string>)[k] = p[k]
+      if (k === 'sharp') continue
+      ;(colors as Record<string, string>)[k] = p[k] as string
     }
   })
 }

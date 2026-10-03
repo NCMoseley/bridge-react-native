@@ -452,6 +452,7 @@ export interface SharedRangeSubscription {
   modelNames?: string[]
   extensionEnabled: boolean
   traderspostEnabled: boolean
+  crossTradeEnabled?: boolean
   createdAt: string
   updatedAt: string
 }

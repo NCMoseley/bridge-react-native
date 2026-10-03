@@ -44,6 +44,8 @@ export interface Palette {
   negative: string
   accent: string
   amber: string
+  /** Geometric/brand themes render square corners. */
+  sharp?: boolean
 }
 
 const PALETTES: Record<ThemeName, Palette> = {
@@ -60,6 +62,7 @@ const PALETTES: Record<ThemeName, Palette> = {
     positive: '#047857', negative: '#b91c1c', accent: '#2563eb', amber: '#b45309',
   },
   ultra: {
+    sharp: true,
     bg: '#150630', card: '#20094a', cardAlt: '#2e0f63',
     border: '#2e0f63', borderLight: '#4a1d8f',
     text: '#ffffff', muted: '#b98ef5', faint: '#9d5ce8',
@@ -102,6 +105,7 @@ const PALETTES: Record<ThemeName, Palette> = {
     positive: '#6b7f00', negative: '#b91c1c', accent: '#2563eb', amber: '#926d00',
   },
   castrol: {
+    sharp: true,
     bg: '#ffffff', card: '#f8fafc', cardAlt: '#e2e8f0',
     border: '#e2e8f0', borderLight: '#cbd5e1',
     text: '#0f172a', muted: '#475569', faint: '#64748b',
@@ -159,7 +163,18 @@ export function applyTheme(
   for (const entry of builders) {
     const fresh = entry.build(palette)
     for (const k of Object.keys(fresh)) {
-      entry.live[k] = fresh[k]
+      let style = fresh[k] as Record<string, unknown>
+      if (palette.sharp && style && typeof style === 'object') {
+        // StyleSheet.create objects are frozen — clone before zeroing radii.
+        let cloned: Record<string, unknown> | undefined
+        for (const prop of Object.keys(style)) {
+          if (prop.startsWith('border') && prop.endsWith('Radius')) {
+            (cloned ??= { ...style })[prop] = 0
+          }
+        }
+        if (cloned) style = cloned
+      }
+      entry.live[k] = style
     }
   }
   storage.setItem(THEME_KEY, name)

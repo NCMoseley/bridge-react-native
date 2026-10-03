@@ -482,7 +482,7 @@ const styles = themedStyles((c) => StyleSheet.create({
     textAlign: 'center',
     width: '13.5%',
   },
-  lp: { color: '#a5b4fc', fontSize: 9, fontWeight: '700' },
+  lp: { color: c.accent, fontSize: 9, fontWeight: '700' },
   modalBackdrop: {
     backgroundColor: 'rgba(0,0,0,0.75)',
     flex: 1,

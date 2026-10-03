@@ -19,6 +19,7 @@ import {
   Input,
   SelectPicker,
   colors,
+  hexToRgba,
   themedStyles,
 } from '../../components/ui'
 import { monthRangeFromHtml } from '../../utils/forex-factory'
@@ -632,7 +633,7 @@ export default function SettingsScreen() {
                   }
                   style={[styles.chip, selected && styles.chipActive]}
                 >
-                  <Text style={[styles.chipText, selected && { color: '#a5b4fc' }]}>
+                  <Text style={[styles.chipText, selected && { color: colors.accent }]}>
                     {selected ? '✓ ' : ''}
                     {a.name}
                   </Text>
@@ -802,7 +803,7 @@ const styles = themedStyles((c) => StyleSheet.create({
     width: 20,
   },
   checkboxMark: { color: '#fff', fontSize: 12, fontWeight: '700' },
-  checkboxOn: { backgroundColor: '#6366f1', borderColor: '#6366f1' },
+  checkboxOn: { backgroundColor: c.accent, borderColor: c.accent },
   chip: {
     backgroundColor: c.bg,
     borderColor: c.border,
@@ -811,19 +812,19 @@ const styles = themedStyles((c) => StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
-  chipActive: { backgroundColor: 'rgba(99,102,241,0.12)', borderColor: '#6366f1' },
+  chipActive: { backgroundColor: hexToRgba(c.accent, 0.12), borderColor: c.accent },
   chipText: { color: c.muted, fontSize: 12 },
   col: { alignItems: 'center', width: 52 },
   container: { backgroundColor: c.bg, flex: 1 },
   dim: { color: c.muted, fontSize: 12 },
   dimSmall: { color: c.faint, fontSize: 11 },
   modelBadge: {
-    backgroundColor: 'rgba(99,102,241,0.12)',
+    backgroundColor: hexToRgba(c.accent, 0.12),
     borderRadius: 4,
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
-  modelBadgeText: { color: '#a5b4fc', fontSize: 10 },
+  modelBadgeText: { color: c.accent, fontSize: 10 },
   rangeCard: {
     backgroundColor: c.bg,
     borderColor: c.border,

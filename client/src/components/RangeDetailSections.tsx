@@ -377,18 +377,22 @@ export function RangeDetailSections({
                       className="inline-flex items-center gap-1.5 rounded-full border border-slate-600 bg-slate-900 px-2.5 py-1 text-xs text-slate-200"
                     >
                       {s.accountName}
-                      <span
-                        className={`rounded px-1 text-[10px] font-bold ${s.traderspostEnabled ? 'bg-indigo-600 text-white' : 'border border-slate-600 text-slate-500'}`}
-                        title={s.crossTrade ? 'CrossTrade routing' : 'TradersPost routing'}
-                      >
-                        {s.crossTrade ? 'CT' : 'TP'}
-                      </span>
-                      <span
-                        className={`rounded px-1 text-[10px] font-bold ${s.extensionEnabled ? 'bg-indigo-600 text-white' : 'border border-slate-600 text-slate-500'}`}
-                        title="Extension drafts"
-                      >
-                        EXT
-                      </span>
+                      {s.traderspostEnabled && (
+                        <span
+                          className="rounded bg-indigo-600 px-1 text-[10px] font-bold text-white"
+                          title={s.crossTrade ? 'CrossTrade routing' : 'TradersPost routing'}
+                        >
+                          {s.crossTrade ? 'CT' : 'TP'}
+                        </span>
+                      )}
+                      {s.extensionEnabled && (
+                        <span
+                          className="rounded bg-indigo-600 px-1 text-[10px] font-bold text-white"
+                          title="Extension drafts"
+                        >
+                          EXT
+                        </span>
+                      )}
                     </span>
                   ))}
                 </div>

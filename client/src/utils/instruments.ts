@@ -42,6 +42,15 @@ export function tradingViewInstrumentIconUrl(
 }
 
 
+/** Crypto futures roots (mirrors the server's CRYPTO_FUTURE_ROOTS) — these
+ *  trade through the weekend, unlike the Sun 18:00 ET → Fri ~17:00 futures
+ *  session every other root follows. */
+const CRYPTO_FUTURE_ROOTS = new Set(['BTC', 'MBT', 'ETH', 'MET', 'SOL', 'XRP'])
+
+export function isCryptoFutureInstrument(instrument: string | undefined | null): boolean {
+  return CRYPTO_FUTURE_ROOTS.has((instrument ?? '').trim().toUpperCase().slice(0, 3))
+}
+
 /** Display form for stored instruments: contract-expiry tickers render as the
  *  continuous contract so "MNQ 12-26" / "MNQZ26" both show as "MNQ1!". */
 export function displayInstrument(instrument: string | undefined | null): string {

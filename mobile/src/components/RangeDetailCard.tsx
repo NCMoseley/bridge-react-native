@@ -4,9 +4,7 @@ import { defaultRangeConfiguration } from '../utils/ranges'
 import { modelColor } from '../utils/model-color'
 import { formatDollars, formatPercent, formatTicks } from '../utils/format'
 import type { RangeConfiguration, RangeSubcategory, SharedRangeDetail } from '../types'
-import { Button, Field, Input, SelectPicker, colors, pnlColor ,
-  themedStyles,
-} from './ui'
+import { Button, Field, Input, SelectPicker, colors, hexToRgba, pnlColor, themedStyles } from './ui'
 import { JournalDate } from './charts'
 
 interface RangeDetailCardProps {
@@ -518,7 +516,7 @@ const styles = themedStyles((c) => StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
-  chipActive: { backgroundColor: 'rgba(99,102,241,0.12)', borderColor: '#6366f1' },
+  chipActive: { backgroundColor: hexToRgba(c.accent, 0.12), borderColor: c.accent },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chipText: { color: c.muted, fontSize: 13 },
   dayChip: {
@@ -529,7 +527,7 @@ const styles = themedStyles((c) => StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
-  dayChipActive: { backgroundColor: '#4f46e5', borderColor: '#4f46e5' },
+  dayChipActive: { backgroundColor: c.accent, borderColor: c.accent },
   dim: { color: c.muted, fontSize: 12 },
   dimSmall: { color: c.faint, fontSize: 11 },
   dot: { borderRadius: 5, height: 10, width: 10 },
