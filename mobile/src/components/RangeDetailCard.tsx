@@ -4,7 +4,9 @@ import { defaultRangeConfiguration } from '../utils/ranges'
 import { modelColor } from '../utils/model-color'
 import { formatDollars, formatPercent, formatTicks } from '../utils/format'
 import type { RangeConfiguration, RangeSubcategory, SharedRangeDetail } from '../types'
-import { Button, Field, Input, SelectPicker, colors, pnlColor } from './ui'
+import { Button, Field, Input, SelectPicker, colors, pnlColor ,
+  themedStyles,
+} from './ui'
 import { JournalDate } from './charts'
 
 interface RangeDetailCardProps {
@@ -504,11 +506,11 @@ export function RangeDetailCard({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => StyleSheet.create({
   chip: {
     alignItems: 'center',
-    backgroundColor: colors.bg,
-    borderColor: colors.border,
+    backgroundColor: c.bg,
+    borderColor: c.border,
     borderRadius: 999,
     borderWidth: 1,
     flexDirection: 'row',
@@ -518,37 +520,37 @@ const styles = StyleSheet.create({
   },
   chipActive: { backgroundColor: 'rgba(99,102,241,0.12)', borderColor: '#6366f1' },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chipText: { color: colors.muted, fontSize: 13 },
+  chipText: { color: c.muted, fontSize: 13 },
   dayChip: {
-    backgroundColor: colors.bg,
-    borderColor: colors.border,
+    backgroundColor: c.bg,
+    borderColor: c.border,
     borderRadius: 6,
     borderWidth: 1,
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
   dayChipActive: { backgroundColor: '#4f46e5', borderColor: '#4f46e5' },
-  dim: { color: colors.muted, fontSize: 12 },
-  dimSmall: { color: colors.faint, fontSize: 11 },
+  dim: { color: c.muted, fontSize: 12 },
+  dimSmall: { color: c.faint, fontSize: 11 },
   dot: { borderRadius: 5, height: 10, width: 10 },
   metric: {
-    backgroundColor: colors.bg,
-    borderColor: colors.border,
+    backgroundColor: c.bg,
+    borderColor: c.border,
     borderRadius: 8,
     borderWidth: 1,
     minWidth: '47%',
     padding: 10,
   },
-  metricValue: { color: colors.text, fontSize: 16, fontWeight: '700', marginVertical: 2 },
-  sectionTitle: { color: colors.text, fontSize: 15, fontWeight: '700', marginBottom: 6 },
+  metricValue: { color: c.text, fontSize: 16, fontWeight: '700', marginVertical: 2 },
+  sectionTitle: { color: c.text, fontSize: 15, fontWeight: '700', marginBottom: 6 },
   settingRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 },
-  settingValue: { color: colors.text, flexShrink: 1, fontSize: 13, textAlign: 'right' },
+  settingValue: { color: c.text, flexShrink: 1, fontSize: 13, textAlign: 'right' },
   subRow: {
-    borderBottomColor: colors.border,
+    borderBottomColor: c.border,
     borderBottomWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
     gap: 10,
     justifyContent: 'space-between',
     paddingVertical: 6,
   },
-})
+}))

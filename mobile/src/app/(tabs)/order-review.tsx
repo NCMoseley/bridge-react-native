@@ -10,7 +10,9 @@ import {
 import * as Clipboard from 'expo-clipboard'
 import { getJson, postJson } from '../../api/client'
 import { useToast } from '../../context/ToastContext'
-import { Button, Card, Field, Input, SelectPicker, Spinner, colors } from '../../components/ui'
+import { Button, Card, Field, Input, SelectPicker, Spinner, colors ,
+  themedStyles,
+} from '../../components/ui'
 import type { DraftStatus, OrderDraft } from '../../types'
 
 import {
@@ -461,28 +463,28 @@ export default function OrderReviewScreen() {
   )
 }
 
-const styles = StyleSheet.create({
-  container: { backgroundColor: colors.bg, flex: 1 },
-  dim: { color: colors.muted, fontSize: 12 },
-  dimSmall: { color: colors.faint, fontSize: 11 },
+const styles = themedStyles((c) => StyleSheet.create({
+  container: { backgroundColor: c.bg, flex: 1 },
+  dim: { color: c.muted, fontSize: 12 },
+  dimSmall: { color: c.faint, fontSize: 11 },
   draftCard: {
-    backgroundColor: colors.card,
-    borderColor: colors.border,
+    backgroundColor: c.card,
+    borderColor: c.border,
     borderRadius: 12,
     borderWidth: 1,
     marginBottom: 10,
     padding: 14,
   },
-  fieldValue: { color: colors.text, fontSize: 13, fontWeight: '700' },
+  fieldValue: { color: c.text, fontSize: 13, fontWeight: '700' },
   rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 },
   statusBadge: {
-    borderColor: colors.border,
+    borderColor: c.border,
     borderRadius: 999,
     borderWidth: 1,
     paddingHorizontal: 8,
     paddingVertical: 2,
   },
-  statusError: { color: colors.negative, fontSize: 12 },
+  statusError: { color: c.negative, fontSize: 12 },
   title: { fontSize: 15, fontWeight: '700' },
-  value: { color: colors.text, fontSize: 13, fontWeight: '600' },
-})
+  value: { color: c.text, fontSize: 13, fontWeight: '600' },
+}))

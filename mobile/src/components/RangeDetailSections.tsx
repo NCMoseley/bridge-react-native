@@ -4,7 +4,9 @@ import { useRouter } from 'expo-router'
 import { getJson, postForm, postJson } from '../api/client'
 import { useToast } from '../context/ToastContext'
 import { onEvent } from '../utils/events'
-import { Badge, Button, Card, CollapsibleSection, Field, Input, SelectPicker, Spinner, colors } from './ui'
+import { Badge, Button, Card, CollapsibleSection, Field, Input, SelectPicker, Spinner, colors ,
+  themedStyles,
+} from './ui'
 import { JournalDate } from './charts'
 import { RangeDetailCard } from './RangeDetailCard'
 import type {
@@ -601,28 +603,28 @@ export function RangeDetailSections({
   )
 }
 
-const styles = StyleSheet.create({
-  dim: { color: colors.muted, fontSize: 12 },
-  dimSmall: { color: colors.faint, fontSize: 11 },
+const styles = themedStyles((c) => StyleSheet.create({
+  dim: { color: c.muted, fontSize: 12 },
+  dimSmall: { color: c.faint, fontSize: 11 },
   listRow: {
-    backgroundColor: colors.bg,
-    borderColor: colors.border,
+    backgroundColor: c.bg,
+    borderColor: c.border,
     borderRadius: 8,
     borderWidth: 1,
     marginTop: 8,
     padding: 10,
   },
   payload: {
-    color: colors.muted,
+    color: c.muted,
     fontFamily: 'Menlo',
     fontSize: 9,
     marginTop: 6,
   },
-  sectionTitle: { color: colors.text, fontSize: 15, fontWeight: '700' },
+  sectionTitle: { color: c.text, fontSize: 15, fontWeight: '700' },
   subChip: {
     alignItems: 'center',
-    backgroundColor: colors.bg,
-    borderColor: colors.border,
+    backgroundColor: c.bg,
+    borderColor: c.border,
     borderRadius: 999,
     borderWidth: 1,
     flexDirection: 'row',
@@ -631,16 +633,16 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
   },
   subTag: { borderRadius: 3, fontSize: 9, fontWeight: '800', overflow: 'hidden', paddingHorizontal: 4 },
-  subTagOff: { color: colors.faint },
+  subTagOff: { color: c.faint },
   subTagOn: { backgroundColor: '#4f46e5', color: '#fff' },
-  value: { color: colors.text, fontSize: 13, fontWeight: '600' },
+  value: { color: c.text, fontSize: 13, fontWeight: '600' },
   warnBox: {
     backgroundColor: 'rgba(251,191,36,0.12)',
-    borderColor: colors.amber,
+    borderColor: c.amber,
     borderRadius: 8,
     borderWidth: 1,
     marginBottom: 10,
     padding: 10,
   },
-  warnText: { color: colors.amber, fontSize: 12 },
-})
+  warnText: { color: c.amber, fontSize: 12 },
+}))

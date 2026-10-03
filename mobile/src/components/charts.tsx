@@ -10,7 +10,9 @@ import {
   JOURNAL_TIME_ZONE,
  formatJournalDate } from '../utils/format'
 import type { AccountJournal, CalendarDay, JournalMetrics, TradeStats } from '../types'
-import { colors, pnlColor, RingChart, toneForCents, GlassSurface } from './ui'
+import { colors, pnlColor, RingChart, toneForCents, GlassSurface ,
+  themedStyles,
+} from './ui'
 
 // ---- JournalDate ----
 
@@ -432,13 +434,13 @@ export function Utc4Clock() {
   )
 }
 
-const chartStyles = StyleSheet.create({
+const chartStyles = themedStyles((c) => StyleSheet.create({
   chip: {
-    backgroundColor: colors.bg,
-    borderColor: colors.border,
+    backgroundColor: c.bg,
+    borderColor: c.border,
     borderRadius: 999,
     borderWidth: 1,
-    color: colors.muted,
+    color: c.muted,
     fontSize: 11,
     fontWeight: '600',
     overflow: 'hidden',
@@ -446,7 +448,7 @@ const chartStyles = StyleSheet.create({
     paddingVertical: 4,
   },
   headerKicker: {
-    color: colors.muted,
+    color: c.muted,
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 1,
@@ -461,19 +463,19 @@ const chartStyles = StyleSheet.create({
   },
   headerValue: { fontSize: 18, fontWeight: '700', textAlign: 'right' },
   mixRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  mixStat: { color: colors.muted, fontSize: 13 },
-  mixStrong: { color: colors.text, fontWeight: '700' },
+  mixStat: { color: c.muted, fontSize: 13 },
+  mixStrong: { color: c.text, fontWeight: '700' },
   panel: {
-    backgroundColor: colors.card,
-    borderColor: colors.border,
+    backgroundColor: c.card,
+    borderColor: c.border,
     borderRadius: 12,
     borderWidth: 1,
     marginBottom: 12,
     padding: 14,
   },
-  subtitle: { color: colors.muted, fontSize: 12 },
+  subtitle: { color: c.muted, fontSize: 12 },
   tableCell: {
-    color: colors.text,
+    color: c.text,
     fontSize: 11,
     paddingHorizontal: 8,
     paddingVertical: 8,
@@ -481,12 +483,12 @@ const chartStyles = StyleSheet.create({
     width: 86,
   },
   tableHeader: {
-    borderBottomColor: colors.border,
+    borderBottomColor: c.border,
     borderBottomWidth: 1,
     flexDirection: 'row',
   },
   tableHeaderCell: {
-    color: colors.muted,
+    color: c.muted,
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.5,
@@ -497,17 +499,17 @@ const chartStyles = StyleSheet.create({
     width: 86,
   },
   tableRow: {
-    borderBottomColor: colors.border,
+    borderBottomColor: c.border,
     borderBottomWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
   },
-  title: { color: colors.text, fontSize: 16, fontWeight: '600' },
-  titleSmall: { color: colors.text, fontSize: 13, fontWeight: '600' },
+  title: { color: c.text, fontSize: 16, fontWeight: '600' },
+  titleSmall: { color: c.text, fontSize: 13, fontWeight: '600' },
   windowBtn: {
     borderRadius: 4,
     paddingHorizontal: 6,
     paddingVertical: 3,
   },
-  windowBtnActive: { backgroundColor: colors.border },
-  windowBtnText: { color: colors.muted, fontSize: 10, fontWeight: '600' },
-})
+  windowBtnActive: { backgroundColor: c.border },
+  windowBtnText: { color: c.muted, fontSize: 10, fontWeight: '600' },
+}))

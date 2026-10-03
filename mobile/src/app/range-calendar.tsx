@@ -19,7 +19,9 @@ import {
   Spinner,
   Stat,
   colors,
+  hexToRgba,
   pnlColor,
+  themedStyles,
 } from '../components/ui'
 import { EquityChart, JournalDate } from '../components/charts'
 import { RangeDetailSections } from '../components/RangeDetailSections'
@@ -127,6 +129,17 @@ export default function RangeCalendarScreen() {
         setFetching(false)
         setRefreshing(false)
       })
+  }, [rangeName, month])
+
+  const [nextCalendar, setNextCalendar] = useState<TradeCalendarMonthView | undefined>()
+  useEffect(() => {
+    if (!rangeName || !month) return
+    const [y, m] = month.split('-').map(Number)
+    if (!y || !m) return
+    const nextKey = `${m === 12 ? y + 1 : y}-${String(m === 12 ? 1 : m + 1).padStart(2, '0')}`
+    getJson<TradeCalendarMonthView>(
+      `/api/range/calendar?range=${encodeURIComponent(rangeName)}&month=${nextKey}`,
+    ).then(setNextCalendar).catch(() => setNextCalendar(undefined))
   }, [rangeName, month])
 
   useEffect(() => {
@@ -259,7 +272,7 @@ export default function RangeCalendarScreen() {
           const dateKey = `${prevMonthKey}-${String(dayNumber).padStart(2, '0')}`
           const day = trailingMap.get(dateKey)
           return (
-            <View key={`prev-${i}`} style={[styles.dayCell, { opacity: 0.5 }]}>
+            <View key={`prev-${i}`} style={[styles.dayCell, { opacity: 0.6 }]}>
               <Text style={styles.dayNumDim}>{dayNumber}</Text>
               {day ? (
                 <Text style={[styles.dayPnl, { color: pnlColor(day.realizedDollarsCents) }]}>
@@ -289,10 +302,10 @@ export default function RangeCalendarScreen() {
                 styles.dayCell,
                 day
                   ? isBeDay || (!isGrey && day.realizedDollarsCents > 0)
-                    ? { backgroundColor: 'rgba(20,83,45,0.35)', borderColor: colors.positive }
+                    ? { backgroundColor: hexToRgba(colors.positive, 0.16), borderColor: colors.positive }
                     : isGrey
                       ? { opacity: 0.6 }
-                      : { backgroundColor: 'rgba(69,10,10,0.35)', borderColor: colors.negative }
+                      : { backgroundColor: hexToRgba(colors.negative, 0.16), borderColor: colors.negative }
                   : null,
                 dateKey === todayKey && { borderColor: colors.accent },
               ]}
@@ -317,6 +330,27 @@ export default function RangeCalendarScreen() {
             </Pressable>
           )
         })}
+        {(() => {
+          const usedCells = offset + totalDays
+          const nextCount = usedCells % 7 === 0 ? 0 : 7 - (usedCells % 7)
+          const nextMap = new Map((nextCalendar?.days ?? []).map((d) => [d.date, d]))
+          const [ny, nm] = month.split('-').map(Number)
+          const nextMonthKey = `${nm === 12 ? ny + 1 : ny}-${String(nm === 12 ? 1 : nm + 1).padStart(2, '0')}`
+          return Array.from({ length: nextCount }, (_, i) => {
+            const dateKey = `${nextMonthKey}-${String(i + 1).padStart(2, '0')}`
+            const day = nextMap.get(dateKey)
+            return (
+              <View key={`next-${i}`} style={[styles.dayCell, { opacity: 0.6 }]}>
+                <Text style={styles.dayNumDim}>{i + 1}</Text>
+                {day ? (
+                  <Text style={[styles.dayPnl, { color: pnlColor(day.realizedDollarsCents) }]}>
+                    {formatPnl(day.realizedDollarsCents)}
+                  </Text>
+                ) : null}
+              </View>
+            )
+          })
+        })()}
       </View>
       <Text style={[styles.dimSmall, { marginTop: 4 }]}>
         Long-press a day to exclude/include it from range performance.
@@ -418,23 +452,23 @@ function loadingOrNothing(loading: boolean) {
   return loading ? <Spinner /> : null
 }
 
-const styles = StyleSheet.create({
-  container: { backgroundColor: colors.bg, flex: 1, padding: 12 },
+const styles = themedStyles((c) => StyleSheet.create({
+  container: { backgroundColor: c.bg, flex: 1, padding: 12 },
   dayCell: {
     aspectRatio: 0.85,
-    backgroundColor: colors.card,
-    borderColor: colors.borderLight,
+    backgroundColor: c.card,
+    borderColor: c.borderLight,
     borderRadius: 6,
     borderWidth: StyleSheet.hairlineWidth,
     padding: 4,
     width: '13.5%',
   },
-  dayNum: { color: colors.text, fontSize: 11, fontWeight: '700' },
-  dayNumDim: { color: colors.faint, fontSize: 11, fontWeight: '700' },
+  dayNum: { color: c.text, fontSize: 11, fontWeight: '700' },
+  dayNumDim: { color: c.faint, fontSize: 11, fontWeight: '700' },
   dayPnl: { fontSize: 10, fontWeight: '700' },
-  daySub: { color: colors.muted, fontSize: 9 },
-  dayTag: { color: colors.muted, fontSize: 8, fontWeight: '800' },
-  dimSmall: { color: colors.muted, fontSize: 11 },
+  daySub: { color: c.muted, fontSize: 9 },
+  dayTag: { color: c.muted, fontSize: 8, fontWeight: '800' },
+  dimSmall: { color: c.muted, fontSize: 11 },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -442,7 +476,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
   },
   gridHeader: {
-    color: colors.faint,
+    color: c.faint,
     fontSize: 10,
     fontWeight: '700',
     textAlign: 'center',
@@ -456,14 +490,14 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   modalCard: {
-    backgroundColor: colors.card,
-    borderColor: colors.border,
+    backgroundColor: c.card,
+    borderColor: c.border,
     borderRadius: 12,
     borderWidth: 1,
     maxHeight: '92%',
     padding: 14,
   },
-  monthLabel: { color: colors.text, fontSize: 16, fontWeight: '700' },
+  monthLabel: { color: c.text, fontSize: 16, fontWeight: '700' },
   monthNav: {
     alignItems: 'center',
     flexDirection: 'row',
@@ -483,14 +517,14 @@ const styles = StyleSheet.create({
     width: 140,
     zIndex: 10,
   },
-  sectionTitle: { color: colors.text, fontSize: 14, fontWeight: '700', marginBottom: 4 },
+  sectionTitle: { color: c.text, fontSize: 14, fontWeight: '700', marginBottom: 4 },
   summaryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 14, marginBottom: 8 },
   tradeRow: {
-    borderTopColor: colors.border,
+    borderTopColor: c.border,
     borderTopWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
     gap: 8,
     paddingVertical: 8,
   },
-  value: { color: colors.text, fontSize: 13, fontWeight: '600' },
-})
+  value: { color: c.text, fontSize: 13, fontWeight: '600' },
+}))

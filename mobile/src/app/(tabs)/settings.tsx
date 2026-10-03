@@ -14,10 +14,12 @@ import { useToast } from '../../context/ToastContext'
 import {
   Button,
   Card,
+  CollapsibleSection,
   Field,
   Input,
   SelectPicker,
   colors,
+  themedStyles,
 } from '../../components/ui'
 import { monthRangeFromHtml } from '../../utils/forex-factory'
 import { isAlertSoundEnabled, setAlertSoundEnabled } from '../../utils/alertSound'
@@ -606,7 +608,10 @@ export default function SettingsScreen() {
         <Button small title="Save subscription" disabled={!newRange.trim()} onPress={saveNewSubscription} style={{ marginTop: 8 }} />
       </Card>
 
-      <Card title="Subscriptions">
+      <CollapsibleSection
+        storageKey="settings:subscriptions:open"
+        title={<Text style={styles.value}>Subscriptions</Text>}
+      >
         <Text style={[styles.dim, { marginBottom: 8 }]}>
           Manage which accounts receive each exact range, with independent Extension and Broker toggles.
         </Text>
@@ -694,7 +699,7 @@ export default function SettingsScreen() {
             />
           </View>
         ) : null}
-      </Card>
+      </CollapsibleSection>
 
       <Card title="Bulk subscriptions">
         <Text style={[styles.dim, { marginBottom: 8 }]}>
@@ -784,12 +789,12 @@ export default function SettingsScreen() {
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => StyleSheet.create({
   checkRow: { alignItems: 'center', flexDirection: 'row', gap: 8 },
   checkbox: {
     alignItems: 'center',
-    backgroundColor: colors.bg,
-    borderColor: colors.border,
+    backgroundColor: c.bg,
+    borderColor: c.border,
     borderRadius: 4,
     borderWidth: 1,
     height: 20,
@@ -799,19 +804,19 @@ const styles = StyleSheet.create({
   checkboxMark: { color: '#fff', fontSize: 12, fontWeight: '700' },
   checkboxOn: { backgroundColor: '#6366f1', borderColor: '#6366f1' },
   chip: {
-    backgroundColor: colors.bg,
-    borderColor: colors.border,
+    backgroundColor: c.bg,
+    borderColor: c.border,
     borderRadius: 999,
     borderWidth: 1,
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
   chipActive: { backgroundColor: 'rgba(99,102,241,0.12)', borderColor: '#6366f1' },
-  chipText: { color: colors.muted, fontSize: 12 },
+  chipText: { color: c.muted, fontSize: 12 },
   col: { alignItems: 'center', width: 52 },
-  container: { backgroundColor: colors.bg, flex: 1 },
-  dim: { color: colors.muted, fontSize: 12 },
-  dimSmall: { color: colors.faint, fontSize: 11 },
+  container: { backgroundColor: c.bg, flex: 1 },
+  dim: { color: c.muted, fontSize: 12 },
+  dimSmall: { color: c.faint, fontSize: 11 },
   modelBadge: {
     backgroundColor: 'rgba(99,102,241,0.12)',
     borderRadius: 4,
@@ -820,23 +825,23 @@ const styles = StyleSheet.create({
   },
   modelBadgeText: { color: '#a5b4fc', fontSize: 10 },
   rangeCard: {
-    backgroundColor: colors.bg,
-    borderColor: colors.border,
+    backgroundColor: c.bg,
+    borderColor: c.border,
     borderRadius: 10,
     borderWidth: 1,
     marginBottom: 10,
     padding: 10,
   },
-  routeAccount: { color: colors.text, fontSize: 13 },
+  routeAccount: { color: c.text, fontSize: 13 },
   routeHeader: {
-    borderBottomColor: colors.border,
+    borderBottomColor: c.border,
     borderBottomWidth: 1,
     flexDirection: 'row',
     paddingVertical: 6,
   },
   routeRow: {
     alignItems: 'center',
-    borderBottomColor: colors.border,
+    borderBottomColor: c.border,
     borderBottomWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
     paddingVertical: 8,
@@ -849,12 +854,12 @@ const styles = StyleSheet.create({
   },
   unsavedBar: {
     alignItems: 'center',
-    borderTopColor: colors.border,
+    borderTopColor: c.border,
     borderTopWidth: 1,
     flexDirection: 'row',
     gap: 10,
     marginTop: 4,
     paddingTop: 10,
   },
-  value: { color: colors.text, fontSize: 14, fontWeight: '700' },
-})
+  value: { color: c.text, fontSize: 14, fontWeight: '700' },
+}))

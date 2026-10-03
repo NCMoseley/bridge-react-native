@@ -6190,6 +6190,17 @@ export class Database {
     return rows.map((row) => this.toBridgeLog(row));
   }
 
+  hasBridgeLogEntry(input: { userId: string; category: string; event: string; bracketId: string; since: string }): boolean {
+    const row = this.db.prepare(
+      `SELECT 1 FROM bridge_logs
+       WHERE user_id = ? AND category = ? AND timestamp >= ?
+         AND json_extract(data_json, '$.event') = ?
+         AND json_extract(data_json, '$.bracketId') = ?
+       LIMIT 1`,
+    ).get(input.userId, input.category, input.since, input.event, input.bracketId);
+    return row != null;
+  }
+
   private toBridgeLog(row: BridgeLogRow): BridgeLog {
     return {
       id: row.id,

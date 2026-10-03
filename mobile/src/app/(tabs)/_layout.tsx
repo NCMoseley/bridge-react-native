@@ -2,7 +2,9 @@ import { Pressable, StyleSheet, Text } from 'react-native'
 import { Tabs } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../context/AuthContext'
-import { colors } from '../../components/ui'
+import { colors ,
+  themedStyles,
+} from '../../components/ui'
 
 export default function TabsLayout() {
   const { logout } = useAuth()
@@ -67,7 +69,7 @@ export default function TabsLayout() {
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => StyleSheet.create({
   logout: { marginRight: 14 },
-  logoutText: { color: colors.accent, fontSize: 14 },
-})
+  logoutText: { color: c.accent, fontSize: 14 },
+}))

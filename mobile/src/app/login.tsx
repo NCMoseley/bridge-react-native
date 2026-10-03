@@ -9,7 +9,9 @@ import {
   View,
 } from 'react-native'
 import { useAuth } from '../context/AuthContext'
-import { Card, colors } from '../components/ui'
+import { Card, colors ,
+  themedStyles,
+} from '../components/ui'
 import { BASE_URL } from '../config'
 
 export default function LoginScreen() {
@@ -71,10 +73,10 @@ export default function LoginScreen() {
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => StyleSheet.create({
   button: {
     alignItems: 'center',
-    backgroundColor: colors.accent,
+    backgroundColor: c.accent,
     borderRadius: 8,
     marginTop: 12,
     paddingVertical: 12,
@@ -82,34 +84,34 @@ const styles = StyleSheet.create({
   buttonText: { color: '#082f49', fontSize: 16, fontWeight: '700' },
   container: {
     alignItems: 'center',
-    backgroundColor: colors.bg,
+    backgroundColor: c.bg,
     flex: 1,
     justifyContent: 'center',
   },
-  error: { color: colors.negative, fontSize: 13, marginTop: 8 },
+  error: { color: c.negative, fontSize: 13, marginTop: 8 },
   inner: { width: '88%', maxWidth: 420 },
   input: {
-    backgroundColor: colors.bg,
-    borderColor: colors.border,
+    backgroundColor: c.bg,
+    borderColor: c.border,
     borderRadius: 8,
     borderWidth: 1,
-    color: colors.text,
+    color: c.text,
     fontSize: 16,
     marginBottom: 10,
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
   logo: {
-    color: colors.text,
+    color: c.text,
     fontSize: 32,
     fontWeight: '800',
     marginBottom: 20,
     textAlign: 'center',
   },
   server: {
-    color: colors.muted,
+    color: c.muted,
     fontSize: 11,
     marginTop: 16,
     textAlign: 'center',
   },
-})
+}))

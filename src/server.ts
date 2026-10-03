@@ -11227,6 +11227,12 @@ export function createApp(
     // own right, not just when legs diverge from config.
     if (!stopLeg && !targetLeg) {
       if (atmMismatchWarned.has(warnKey)) return;
+      // Persisted dedup — a restart re-checks every open bracket, so gate on
+      // the log row instead of memory alone (warn once per bracket per 24h).
+      if (database.hasBridgeLogEntry({
+        userId: account.userId, category: 'crosstrade', event: 'crossTradeAtmMissing',
+        bracketId: order.bracketId ?? '', since: new Date(Date.now() - 24 * 3600_000).toISOString(),
+      })) { atmMismatchWarned.add(warnKey); return; }
       atmMismatchWarned.add(warnKey);
       emitToUser(account.userId, 'toast:warning', {
         persistent: true,
@@ -11252,6 +11258,10 @@ export function createApp(
       if (Math.abs(implied - expectedTp) > 1) mismatches.push(`TP ${implied}t vs config ${expectedTp}t`);
     }
     if (mismatches.length === 0) return;
+    if (database.hasBridgeLogEntry({
+      userId: account.userId, category: 'crosstrade', event: 'crossTradeAtmMismatch',
+      bracketId: order.bracketId ?? '', since: new Date(Date.now() - 24 * 3600_000).toISOString(),
+    })) { atmMismatchWarned.add(warnKey); return; }
     atmMismatchWarned.add(warnKey);
     emitToUser(account.userId, 'toast:warning', {
       persistent: true,

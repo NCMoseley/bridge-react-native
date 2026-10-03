@@ -12,7 +12,9 @@ import {
   type ForexFactoryEvent,
   type ForexFactoryRangeView,
 } from '../utils/forex-factory'
-import { colors } from './ui'
+import { colors ,
+  themedStyles,
+} from './ui'
 
 interface ForexFactoryDayView {
   source: 'ForexFactory'
@@ -232,27 +234,27 @@ export function RedFolderMiniCalendar() {
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => StyleSheet.create({
   calendarCard: {
-    backgroundColor: colors.card,
-    borderColor: colors.border,
+    backgroundColor: c.card,
+    borderColor: c.border,
     borderRadius: 12,
     borderWidth: 1,
     marginBottom: 12,
     padding: 12,
   },
   calendarHeader: { alignItems: 'center', flexDirection: 'row', gap: 10 },
-  calendarTitle: { color: colors.text, fontSize: 14, fontWeight: '700' },
+  calendarTitle: { color: c.text, fontSize: 14, fontWeight: '700' },
   dayColumn: {
-    borderColor: colors.border,
+    borderColor: c.border,
     borderRadius: 8,
     borderWidth: 1,
     marginTop: 8,
     padding: 8,
   },
-  dayName: { color: colors.text, fontSize: 13, fontWeight: '700', marginBottom: 4 },
+  dayName: { color: c.text, fontSize: 13, fontWeight: '700', marginBottom: 4 },
   eventChip: {
-    backgroundColor: colors.bg,
+    backgroundColor: c.bg,
     borderRadius: 6,
     borderWidth: 1,
     flexDirection: 'row',
@@ -261,15 +263,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
   },
-  eventMeta: { color: colors.muted, fontSize: 10 },
+  eventMeta: { color: c.muted, fontSize: 10 },
   eventRow: {
-    backgroundColor: colors.bg,
+    backgroundColor: c.bg,
     borderRadius: 6,
     marginBottom: 4,
     paddingHorizontal: 6,
     paddingVertical: 4,
   },
-  eventTitle: { color: colors.text, fontSize: 11, fontWeight: '600' },
+  eventTitle: { color: c.text, fontSize: 11, fontWeight: '600' },
   highBadge: {
     backgroundColor: RED,
     borderRadius: 3,
@@ -282,12 +284,12 @@ const styles = StyleSheet.create({
   },
   miniDay: {
     alignItems: 'center',
-    backgroundColor: colors.bg,
-    borderColor: colors.border,
+    backgroundColor: c.bg,
+    borderColor: c.border,
     borderRadius: 6,
     borderWidth: 1,
     flex: 1,
     paddingVertical: 4,
   },
-  miniDayLabel: { color: colors.muted, fontSize: 9, fontWeight: '700' },
-})
+  miniDayLabel: { color: c.muted, fontSize: 9, fontWeight: '700' },
+}))

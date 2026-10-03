@@ -23,6 +23,7 @@ import {
   SelectPicker,
   colors,
   pnlColor,
+  themedStyles,
 } from '../../components/ui'
 import { AccountPerformanceChart } from '../../components/charts'
 import { getCachedAccounts, setCachedAccounts } from '../../utils/accounts-cache'
@@ -867,25 +868,25 @@ export default function AccountsScreen() {
   )
 }
 
-const styles = StyleSheet.create({
-  accountName: { color: colors.text, fontSize: 15, fontWeight: '700' },
+const styles = themedStyles((c) => StyleSheet.create({
+  accountName: { color: c.text, fontSize: 15, fontWeight: '700' },
   btnRow: { flexDirection: 'row', gap: 8, justifyContent: 'flex-end', marginTop: 8 },
-  checkLabel: { color: colors.text, flex: 1, fontSize: 13 },
+  checkLabel: { color: c.text, flex: 1, fontSize: 13 },
   checkRow: { alignItems: 'center', flexDirection: 'row', gap: 8, paddingVertical: 4 },
   checkbox: {
     alignItems: 'center',
-    borderColor: colors.border,
+    borderColor: c.border,
     borderRadius: 4,
     borderWidth: 1,
     height: 18,
     justifyContent: 'center',
     width: 18,
   },
-  container: { backgroundColor: colors.bg, flex: 1 },
+  container: { backgroundColor: c.bg, flex: 1 },
   deprecatedRow: {
     alignItems: 'center',
-    backgroundColor: colors.card,
-    borderColor: colors.border,
+    backgroundColor: c.card,
+    borderColor: c.border,
     borderRadius: 10,
     borderWidth: 1,
     flexDirection: 'row',
@@ -893,10 +894,10 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     padding: 12,
   },
-  dim: { color: colors.muted, fontSize: 12 },
-  dimSmall: { color: colors.faint, fontSize: 11 },
-  divider: { borderTopColor: colors.border, borderTopWidth: 1, marginVertical: 12 },
-  fieldLabel: { color: colors.muted, fontSize: 12, fontWeight: '600', marginBottom: 6 },
+  dim: { color: c.muted, fontSize: 12 },
+  dimSmall: { color: c.faint, fontSize: 11 },
+  divider: { borderTopColor: c.border, borderTopWidth: 1, marginVertical: 12 },
+  fieldLabel: { color: c.muted, fontSize: 12, fontWeight: '600', marginBottom: 6 },
   modalBackdrop: {
     alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.7)',
@@ -905,16 +906,16 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   modalCard: {
-    backgroundColor: colors.card,
-    borderColor: colors.border,
+    backgroundColor: c.card,
+    borderColor: c.border,
     borderRadius: 12,
     borderWidth: 1,
     padding: 16,
     width: '100%',
   },
   modeCard: {
-    backgroundColor: colors.bg,
-    borderColor: colors.border,
+    backgroundColor: c.bg,
+    borderColor: c.border,
     borderRadius: 8,
     borderWidth: 1,
     flex: 1,
@@ -930,23 +931,23 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   pnlBtnText: { color: '#fff', fontSize: 11, fontWeight: '700' },
-  sectionTitle: { color: colors.text, fontSize: 14, fontWeight: '700', marginBottom: 4 },
+  sectionTitle: { color: c.text, fontSize: 14, fontWeight: '700', marginBottom: 4 },
   subCard: {
-    backgroundColor: colors.bg,
-    borderColor: colors.border,
+    backgroundColor: c.bg,
+    borderColor: c.border,
     borderRadius: 8,
     borderWidth: 1,
     marginTop: 10,
     padding: 10,
   },
-  value: { color: colors.text, fontSize: 13, fontWeight: '600' },
+  value: { color: c.text, fontSize: 13, fontWeight: '600' },
   warnBox: {
     backgroundColor: 'rgba(251,191,36,0.12)',
-    borderColor: colors.amber,
+    borderColor: c.amber,
     borderRadius: 8,
     borderWidth: 1,
     marginBottom: 10,
     padding: 10,
   },
-  warnText: { color: colors.amber, fontSize: 12 },
-})
+  warnText: { color: c.amber, fontSize: 12 },
+}))

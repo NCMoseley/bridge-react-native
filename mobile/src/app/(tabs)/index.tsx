@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native'
 import { useRouter } from 'expo-router'
+import { Ionicons } from '@expo/vector-icons'
 import { storage } from '../../utils/storage'
 import { getJson, postForm, postJson } from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
@@ -25,16 +26,18 @@ import {
   Spinner,
   SelectPicker,
   colors,
+  hexToRgba,
   pnlColor,
   toneForCents,
+  themedStyles,
 } from '../../components/ui'
 import {
   DailyCumulativeChart,
   JournalDate,
   MonthlyPerformanceMix,
 } from '../../components/charts'
-import { ManualTradeForm } from '../../components/ManualTradeForm'
 import { onEvent } from '../../utils/events'
+import { unreadCount } from '../../utils/messages'
 import { formatPrice as formatDraftPrice } from '../../utils/drafts'
 import { displayInstrument } from '../../utils/instruments'
 import {
@@ -176,8 +179,13 @@ export default function JournalScreen() {
   const [isSpinning, setIsSpinning] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
   const [showClosedFilters, setShowClosedFilters] = useState(false)
-  const [showManualTrade, setShowManualTrade] = useState(false)
   const [resendingId, setResendingId] = useState<string | null>(null)
+  const [unread, setUnread] = useState(unreadCount())
+  useEffect(() => {
+    const update = () => setUnread(unreadCount())
+    update()
+    return onEvent('messages:updated', update)
+  }, [])
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
 
   const refresh = useCallback(() => {
@@ -203,6 +211,7 @@ export default function JournalScreen() {
     () => (storage.getItem('journal:calendar:view') as 'grid' | 'list') ?? 'list',
   )
   const [serverJournalDays, setServerJournalDays] = useState<Record<string, TradeJournalDay> | undefined>(cached?.journalDays)
+  const [nextJournalDays, setNextJournalDays] = useState<Record<string, TradeJournalDay>>({})
 
   const tradeJournal = serverTradeJournal
   const calendar = serverCalendar
@@ -252,6 +261,16 @@ export default function JournalScreen() {
         })
         .catch(() => setIsLoading(false))
     if (!freshCache) void fetchJournal()
+    const [y, m] = viewedMonth.split('-').map(Number)
+    if (y && m) {
+      const nextKey = `${m === 12 ? y + 1 : y}-${String(m === 12 ? 1 : m + 1).padStart(2, '0')}`
+      const nextParams = new URLSearchParams()
+      for (const id of selectedAccountIds) nextParams.append('account', id)
+      nextParams.set('month', nextKey)
+      void getJson<{ journalDays: Record<string, TradeJournalDay> }>(`/api/journal?${nextParams.toString()}`)
+        .then((data) => setNextJournalDays(data.journalDays ?? {}))
+        .catch(() => setNextJournalDays({}))
+    }
     const poll = setInterval(() => void fetchJournal(), 15_000)
     return () => clearInterval(poll)
   }, [selectedAccountIds, viewedMonth, refreshKey, user?.userId])
@@ -619,6 +638,15 @@ export default function JournalScreen() {
           <Text style={styles.topLink}>{showFilters ? 'Hide filters' : 'Filters'}</Text>
         </Pressable>
         {isLoading ? <Text style={styles.topLink}>…</Text> : null}
+        <View style={{ flex: 1 }} />
+        <Pressable hitSlop={8} onPress={() => router.push('/messages')} style={{ padding: 2 }}>
+          <Ionicons color={unread > 0 ? colors.accent : colors.muted} name="notifications-outline" size={18} />
+          {unread > 0 ? (
+            <View style={styles.unreadBadge}>
+              <Text style={styles.unreadBadgeText}>{unread > 99 ? '99+' : unread}</Text>
+            </View>
+          ) : null}
+        </Pressable>
       </View>
 
       {showFilters ? (
@@ -755,9 +783,10 @@ export default function JournalScreen() {
         title={
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>{calendarMonthLabel(viewedMonth)}</Text>
-            <View style={{ flexDirection: 'row', gap: 4 }}>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
               <Button
                 small
+                hitSlop={8}
                 variant="ghost"
                 title={calendarView === 'grid' ? '≡' : '▦'}
                 onPress={() => {
@@ -768,9 +797,8 @@ export default function JournalScreen() {
                   })
                 }}
               />
-              <Button small variant="ghost" title="‹" onPress={() => setViewedMonth((m) => shiftMonthKey(m, -1))} />
-              <Button small variant="ghost" title="›" onPress={() => setViewedMonth((m) => shiftMonthKey(m, 1))} />
-              <Button small variant="ghost" title="+" onPress={() => setShowManualTrade(true)} />
+              <Button small hitSlop={8} variant="ghost" title="‹" onPress={() => setViewedMonth((m) => shiftMonthKey(m, -1))} />
+              <Button small hitSlop={8} variant="ghost" title="›" onPress={() => setViewedMonth((m) => shiftMonthKey(m, 1))} />
             </View>
           </View>
         }
@@ -869,10 +897,10 @@ export default function JournalScreen() {
                     styles.dayCell,
                     isToday && styles.dayCellToday,
                     hasTrades && !isBeDay && {
-                      backgroundColor: day!.realizedDollarsCents > 0 ? 'rgba(20,83,45,0.35)' : 'rgba(69,10,10,0.35)',
+                      backgroundColor: day!.realizedDollarsCents > 0 ? hexToRgba(colors.positive, 0.16) : hexToRgba(colors.negative, 0.16),
                       borderColor: day!.realizedDollarsCents > 0 ? colors.positive : colors.negative,
                     },
-                    isBeDay && { backgroundColor: 'rgba(20,83,45,0.35)', borderColor: colors.positive },
+                    isBeDay && { backgroundColor: hexToRgba(colors.positive, 0.16), borderColor: colors.positive },
                   ]}
                 >
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -887,6 +915,23 @@ export default function JournalScreen() {
                     <Text style={styles.daySub}>·</Text>
                   ) : null}
                 </Pressable>,
+              )
+            }
+            const usedCells = startDay + totalDays
+            const spillCount = usedCells % 7 === 0 ? 0 : 7 - (usedCells % 7)
+            const nextMonthKey = `${mon === 12 ? year + 1 : year}-${String(mon === 12 ? 1 : mon + 1).padStart(2, '0')}`
+            for (let i = 1; i <= spillCount; i++) {
+              const dateKey = `${nextMonthKey}-${String(i).padStart(2, '0')}`
+              const day = nextJournalDays[dateKey]
+              cells.push(
+                <View key={`next-${dateKey}`} style={[styles.dayCell, styles.dayCellOff]}>
+                  <Text style={styles.dayNumOff}>{i}</Text>
+                  {day ? (
+                    <Text style={[styles.dayPnl, { color: pnlColor(day.summary.realizedDollarsCents) }]} numberOfLines={1}>
+                      {formatPnlCompact(day.summary.realizedDollarsCents)}
+                    </Text>
+                  ) : null}
+                </View>,
               )
             }
             return cells
@@ -1136,20 +1181,6 @@ export default function JournalScreen() {
       </CollapsibleSection>
 
       {/* Manual trade modal */}
-      <Modal visible={showManualTrade} animationType="slide" transparent onRequestClose={() => setShowManualTrade(false)}>
-        <View style={styles.modalBackdrop}>
-          <ScrollView contentContainerStyle={{ padding: 16 }}>
-            <ManualTradeForm
-              accounts={allAccounts}
-              onCancel={() => setShowManualTrade(false)}
-              onSave={() => {
-                setShowManualTrade(false)
-                refresh()
-              }}
-            />
-          </ScrollView>
-        </View>
-      </Modal>
 
       {/* Day detail modal */}
       <Modal visible={selectedDay != null} animationType="slide" transparent onRequestClose={() => setSelectedDay(null)}>
@@ -1308,10 +1339,10 @@ function ClosedTradeRow({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => StyleSheet.create({
   accountChip: {
-    backgroundColor: colors.bg,
-    borderColor: colors.border,
+    backgroundColor: c.bg,
+    borderColor: c.border,
     borderRadius: 6,
     borderWidth: 1,
     paddingHorizontal: 8,
@@ -1321,27 +1352,27 @@ const styles = StyleSheet.create({
   calendarGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   calendarHeader: { flexDirection: 'row', marginBottom: 4 },
   calendarHeaderCell: {
-    color: colors.muted,
+    color: c.muted,
     fontSize: 11,
     fontWeight: '700',
     textAlign: 'center',
     width: '13.5%',
   },
   chip: {
-    backgroundColor: colors.bg,
-    borderColor: colors.border,
+    backgroundColor: c.bg,
+    borderColor: c.border,
     borderRadius: 999,
     borderWidth: 1,
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
-  chipSelected: { backgroundColor: colors.border, borderColor: colors.accent },
-  chipText: { color: colors.muted, fontSize: 13 },
-  container: { backgroundColor: colors.bg, flex: 1 },
+  chipSelected: { backgroundColor: c.border, borderColor: c.accent },
+  chipText: { color: c.muted, fontSize: 13 },
+  container: { backgroundColor: c.bg, flex: 1 },
   content: { padding: 12, paddingBottom: 40 },
   dayCell: {
-    borderColor: colors.borderLight,
+    borderColor: c.borderLight,
     borderRadius: 6,
     borderWidth: StyleSheet.hairlineWidth,
     marginBottom: 3,
@@ -1349,24 +1380,24 @@ const styles = StyleSheet.create({
     padding: 3,
     width: '13.5%',
   },
-  dayCellOff: { borderStyle: 'dashed', opacity: 0.4 },
-  dayCellToday: { borderColor: colors.accent },
-  dayLp: { color: colors.accent, fontSize: 7, fontWeight: '600' },
-  dayNum: { color: colors.text, fontSize: 12, fontWeight: '700' },
-  dayNumOff: { color: colors.faint, fontSize: 12, fontWeight: '700' },
-  dayListDate: { color: colors.text, fontSize: 13, fontWeight: '700' },
+  dayCellOff: { borderStyle: 'dashed', opacity: 0.6 },
+  dayCellToday: { borderColor: c.accent },
+  dayLp: { color: c.accent, fontSize: 7, fontWeight: '600' },
+  dayNum: { color: c.text, fontSize: 12, fontWeight: '700' },
+  dayNumOff: { color: c.faint, fontSize: 12, fontWeight: '700' },
+  dayListDate: { color: c.text, fontSize: 13, fontWeight: '700' },
   dayListLp: { color: '#a855f7', fontSize: 11, fontWeight: '700' },
   dayListPnl: { fontSize: 14, fontWeight: '800' },
   dayListRow: {
     alignItems: 'center',
-    borderBottomColor: colors.border,
+    borderBottomColor: c.border,
     borderBottomWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
     paddingVertical: 9,
   },
   dayPnl: { fontSize: 9, fontWeight: '700', marginTop: 1 },
-  daySub: { color: colors.muted, fontSize: 8 },
-  dim: { color: colors.muted, fontSize: 13 },
+  daySub: { color: c.muted, fontSize: 8 },
+  dim: { color: c.muted, fontSize: 13 },
   filledDot: {
     backgroundColor: '#34d399',
     borderRadius: 4,
@@ -1375,17 +1406,17 @@ const styles = StyleSheet.create({
     width: 8,
   },
   groupCard: {
-    backgroundColor: colors.bg,
-    borderColor: colors.border,
+    backgroundColor: c.bg,
+    borderColor: c.border,
     borderRadius: 10,
     borderWidth: 1,
     marginBottom: 8,
   },
   groupHeader: { flexDirection: 'row', padding: 10 },
   groupPnl: { fontSize: 16, fontWeight: '700' },
-  groupRange: { color: colors.accent, fontSize: 14, fontWeight: '600' },
+  groupRange: { color: c.accent, fontSize: 14, fontWeight: '600' },
   kicker: {
-    color: colors.muted,
+    color: c.muted,
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 1,
@@ -1403,25 +1434,25 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   nestedRow: {
-    borderTopColor: colors.border,
+    borderTopColor: c.border,
     borderTopWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
     padding: 10,
   },
   openCard: {
-    backgroundColor: colors.bg,
-    borderColor: colors.border,
+    backgroundColor: c.bg,
+    borderColor: c.border,
     borderRadius: 10,
     borderWidth: 1,
     marginBottom: 8,
     padding: 10,
   },
   openCardHeader: { alignItems: 'center', flexDirection: 'row', marginBottom: 6 },
-  openCardTitle: { color: colors.text, fontSize: 14, fontWeight: '700' },
-  openCell: { color: colors.text, fontSize: 11 },
+  openCardTitle: { color: c.text, fontSize: 14, fontWeight: '700' },
+  openCell: { color: c.text, fontSize: 11 },
   openRow: {
     alignItems: 'center',
-    backgroundColor: colors.card,
+    backgroundColor: c.card,
     borderRadius: 6,
     flexDirection: 'row',
     gap: 6,
@@ -1436,21 +1467,21 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   rangeBreakdown: {
-    backgroundColor: colors.bg,
-    borderColor: colors.border,
+    backgroundColor: c.bg,
+    borderColor: c.border,
     borderRadius: 8,
     borderWidth: 1,
     marginBottom: 6,
     padding: 10,
   },
-  reviewBtn: { color: colors.accent, fontSize: 11, fontWeight: '600' },
+  reviewBtn: { color: c.accent, fontSize: 11, fontWeight: '600' },
   sectionHeader: {
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
-  sectionTitle: { color: colors.text, fontSize: 15, fontWeight: '700' },
-  strong: { color: colors.text, fontSize: 13, fontWeight: '600' },
+  sectionTitle: { color: c.text, fontSize: 15, fontWeight: '700' },
+  strong: { color: c.text, fontSize: 13, fontWeight: '600' },
   topBar: {
     alignItems: 'center',
     flexDirection: 'row',
@@ -1458,5 +1489,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     paddingVertical: 6,
   },
-  topLink: { color: colors.muted, fontSize: 12 },
-})
+  topLink: { color: c.muted, fontSize: 12 },
+  unreadBadge: {
+    alignItems: 'center',
+    backgroundColor: c.negative,
+    borderRadius: 7,
+    justifyContent: 'center',
+    minWidth: 14,
+    paddingHorizontal: 3,
+    position: 'absolute',
+    right: -6,
+    top: -4,
+  },
+  unreadBadgeText: { color: '#fff', fontSize: 8, fontWeight: '800' },
+}))

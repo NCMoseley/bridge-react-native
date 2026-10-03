@@ -22,6 +22,7 @@ import {
   SelectPicker,
   colors,
   pnlColor,
+  themedStyles,
 } from '../components/ui'
 import { JournalDate } from '../components/charts'
 import { getCachedDebugging, setCachedDebugging } from '../utils/debugging-cache'
@@ -1687,24 +1688,24 @@ export function DebuggingContent({ monitoringOnly = false }: { monitoringOnly?: 
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => StyleSheet.create({
   checkRow: { alignItems: 'center', flexDirection: 'row', gap: 8 },
   checkbox: {
     alignItems: 'center',
-    borderColor: colors.border,
+    borderColor: c.border,
     borderRadius: 4,
     borderWidth: 1,
     height: 18,
     justifyContent: 'center',
     width: 18,
   },
-  container: { backgroundColor: colors.bg, flex: 1 },
-  dim: { color: colors.muted, fontSize: 12 },
-  dimSmall: { color: colors.faint, fontSize: 11 },
+  container: { backgroundColor: c.bg, flex: 1 },
+  dim: { color: c.muted, fontSize: 12 },
+  dimSmall: { color: c.faint, fontSize: 11 },
   groupLabel: {
-    borderBottomColor: colors.border,
+    borderBottomColor: c.border,
     borderBottomWidth: 1,
-    color: colors.faint,
+    color: c.faint,
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 1,
@@ -1714,33 +1715,33 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   listRow: {
-    backgroundColor: colors.bg,
-    borderColor: colors.border,
+    backgroundColor: c.bg,
+    borderColor: c.border,
     borderRadius: 8,
     borderWidth: 1,
     marginTop: 8,
     padding: 10,
   },
   logBadge: { fontSize: 10, fontWeight: '800' },
-  logMeta: { color: colors.faint, fontSize: 10, marginTop: 2 },
+  logMeta: { color: c.faint, fontSize: 10, marginTop: 2 },
   logRow: {
-    borderBottomColor: colors.border,
+    borderBottomColor: c.border,
     borderBottomWidth: StyleSheet.hairlineWidth,
     paddingVertical: 6,
   },
-  logSummary: { color: colors.text, flex: 1, fontSize: 12 },
+  logSummary: { color: c.text, flex: 1, fontSize: 12 },
   resultBox: {
-    backgroundColor: colors.bg,
-    borderColor: colors.border,
+    backgroundColor: c.bg,
+    borderColor: c.border,
     borderRadius: 8,
     borderWidth: 1,
     marginTop: 10,
     padding: 10,
   },
-  resultText: { color: colors.text, fontFamily: 'Menlo', fontSize: 10 },
-  sectionTitle: { color: colors.text, fontSize: 15, fontWeight: '700' },
-  value: { color: colors.text, fontSize: 13, fontWeight: '600' },
-})
+  resultText: { color: c.text, fontFamily: 'Menlo', fontSize: 10 },
+  sectionTitle: { color: c.text, fontSize: 15, fontWeight: '700' },
+  value: { color: c.text, fontSize: 13, fontWeight: '600' },
+}))
 
 export default function DebuggingScreen() {
   return <DebuggingContent />

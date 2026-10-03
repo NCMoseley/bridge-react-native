@@ -14,6 +14,7 @@ import type { StyleProp, TextStyle, ViewStyle } from 'react-native'
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
 import Svg, { Circle, Path } from 'react-native-svg'
 import { storage } from '../utils/storage'
+import { applyTheme, registerThemedStyles, currentTheme, isLightTheme, paletteFor, type ThemeName, type Palette } from '../utils/theme'
 
 export const colors = {
   bg: '#020617',
@@ -28,6 +29,30 @@ export const colors = {
   negative: '#f87171',
   accent: '#38bdf8',
   amber: '#fbbf24',
+}
+
+export function setTheme(name: ThemeName) {
+  applyTheme(name, (p) => {
+    for (const k of Object.keys(p) as (keyof Palette)[]) {
+      ;(colors as Record<string, string>)[k] = p[k]
+    }
+  })
+}
+
+// StyleSheet.create at module scope bakes colors in. themedStyles registers
+// the builder so applyTheme can rewrite the live object when the theme flips.
+export function themedStyles<T>(builder: (c: typeof colors) => T): T {
+  const live = builder(colors)
+  registerThemedStyles(live as Record<string, unknown>, (p) => {
+    const c = { ...colors, ...p }
+    return builder(c) as Record<string, unknown>
+  })
+  return live
+}
+
+export function hexToRgba(hex: string, alpha: number): string {
+  const n = parseInt(hex.slice(1), 16)
+  return `rgba(${(n >> 16) & 0xff},${(n >> 8) & 0xff},${n & 0xff},${alpha})`
 }
 
 export function pnlColor(cents: number): string {
@@ -120,6 +145,7 @@ export function Button({
   disabled,
   style,
   small,
+  hitSlop,
 }: {
   title: string
   onPress: () => void
@@ -127,10 +153,12 @@ export function Button({
   disabled?: boolean
   style?: StyleProp<ViewStyle>
   small?: boolean
+  hitSlop?: number
 }) {
   return (
     <Pressable
       disabled={disabled}
+      hitSlop={hitSlop}
       onPress={onPress}
       style={({ pressed }) => [
         styles.button,
@@ -209,19 +237,20 @@ export function Badge({
   children: React.ReactNode
   status?: 'online' | 'offline' | 'warning' | 'error' | 'info'
 }) {
-  const bg =
+  const light = isLightTheme()
+  const [bg, fg] =
     status === 'online'
-      ? '#14532d'
+      ? light ? ['#d1fae5', '#047857'] : ['#14532d', '#4ade80']
       : status === 'warning'
-        ? '#451a03'
+        ? light ? ['#fef3c7', '#b45309'] : ['#451a03', '#fbbf24']
         : status === 'error'
-          ? '#450a0a'
+          ? light ? ['#fee2e2', '#b91c1c'] : ['#450a0a', '#f87171']
           : status === 'info'
-            ? '#0c4a6e'
-            : '#1e293b'
+            ? light ? ['#e0f2fe', '#0369a1'] : ['#0c4a6e', '#38bdf8']
+            : light ? ['#e2e8f0', colors.muted] : ['#1e293b', colors.text]
   return (
     <View style={[styles.badge, { backgroundColor: bg }]}>
-      <Text style={styles.badgeText}>{children}</Text>
+      <Text style={[styles.badgeText, { color: fg }]}>{children}</Text>
     </View>
   )
 }
@@ -525,16 +554,16 @@ export function GaugeChart({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => StyleSheet.create({
   badge: {
     alignSelf: 'flex-start',
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 2,
   },
-  badgeText: { color: colors.text, fontSize: 11, fontWeight: '600' },
+  badgeText: { color: c.text, fontSize: 11, fontWeight: '600' },
   balanceBar: {
-    backgroundColor: colors.bg,
+    backgroundColor: c.bg,
     borderRadius: 999,
     flexDirection: 'row',
     height: 8,
@@ -550,20 +579,20 @@ const styles = StyleSheet.create({
   buttonDanger: { backgroundColor: '#7f1d1d' },
   buttonGhost: { backgroundColor: 'transparent' },
   buttonPrimary: { backgroundColor: '#0369a1' },
-  buttonSecondary: { backgroundColor: colors.border },
+  buttonSecondary: { backgroundColor: c.border },
   buttonSmall: { paddingHorizontal: 10, paddingVertical: 6 },
   buttonText: { color: '#fff', fontSize: 14, fontWeight: '600' },
   buttonTextSmall: { fontSize: 12 },
   card: {
-    backgroundColor: colors.card,
-    borderColor: colors.border,
+    backgroundColor: c.card,
+    borderColor: c.border,
     borderRadius: 12,
     borderWidth: 1,
     marginBottom: 12,
     padding: 14,
   },
   cardTitle: {
-    color: colors.muted,
+    color: c.muted,
     fontSize: 12,
     fontWeight: '600',
     letterSpacing: 0.5,
@@ -571,7 +600,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   collapsibleBody: {
-    borderTopColor: colors.border,
+    borderTopColor: c.border,
     borderTopWidth: 1,
     paddingTop: 12,
   },
@@ -579,27 +608,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
   },
-  collapsibleToggle: { color: colors.muted, fontSize: 22, marginLeft: 12 },
-  emptyText: { color: colors.muted, paddingVertical: 8, textAlign: 'center' },
-  fieldLabel: { color: colors.muted, fontSize: 12, marginBottom: 4 },
+  collapsibleToggle: { color: c.muted, fontSize: 22, marginLeft: 12 },
+  emptyText: { color: c.muted, paddingVertical: 8, textAlign: 'center' },
+  fieldLabel: { color: c.muted, fontSize: 12, marginBottom: 4 },
   input: {
-    backgroundColor: colors.bg,
-    borderColor: colors.border,
+    backgroundColor: c.bg,
+    borderColor: c.border,
     borderRadius: 8,
     borderWidth: 1,
-    color: colors.text,
+    color: c.text,
     fontSize: 14,
     paddingHorizontal: 10,
     paddingVertical: 8,
   },
-  kpiLabel: { color: colors.muted, fontSize: 13 },
+  kpiLabel: { color: c.muted, fontSize: 13 },
   kpiRow: {
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingVertical: 3,
   },
-  kpiValue: { color: colors.text, fontSize: 13, fontWeight: '600' },
+  kpiValue: { color: c.text, fontSize: 13, fontWeight: '600' },
   selectBackdrop: {
     alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.7)',
@@ -609,8 +638,8 @@ const styles = StyleSheet.create({
   },
   selectButton: {
     alignItems: 'center',
-    backgroundColor: colors.bg,
-    borderColor: colors.border,
+    backgroundColor: c.bg,
+    borderColor: c.border,
     borderRadius: 8,
     borderWidth: 1,
     flexDirection: 'row',
@@ -618,11 +647,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 9,
   },
-  selectButtonText: { color: colors.text, flex: 1, fontSize: 14, marginRight: 8 },
+  selectButtonText: { color: c.text, flex: 1, fontSize: 14, marginRight: 8 },
   selectOption: { borderRadius: 6, paddingHorizontal: 12, paddingVertical: 10 },
   selectSheet: {
-    backgroundColor: colors.card,
-    borderColor: colors.border,
+    backgroundColor: c.card,
+    borderColor: c.border,
     borderRadius: 12,
     borderWidth: 1,
     maxHeight: '70%',
@@ -634,13 +663,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
-  segmentActive: { backgroundColor: colors.border },
-  segmentText: { color: colors.muted, fontSize: 12, fontWeight: '600' },
-  segmentTextActive: { color: colors.text },
+  segmentActive: { backgroundColor: c.border },
+  segmentText: { color: c.muted, fontSize: 12, fontWeight: '600' },
+  segmentTextActive: { color: c.text },
   segmented: {
     alignSelf: 'flex-start',
-    backgroundColor: colors.bg,
-    borderColor: colors.border,
+    backgroundColor: c.bg,
+    borderColor: c.border,
     borderRadius: 8,
     borderWidth: 1,
     flexDirection: 'row',
@@ -650,9 +679,9 @@ const styles = StyleSheet.create({
   },
   spinner: { alignItems: 'center', flex: 1, justifyContent: 'center' },
   stat: { minWidth: '30%', paddingVertical: 4 },
-  statLabel: { color: colors.muted, fontSize: 11, marginBottom: 2 },
-  statValue: { color: colors.text, fontSize: 16, fontWeight: '600' },
-})
+  statLabel: { color: c.muted, fontSize: 11, marginBottom: 2 },
+  statValue: { color: c.text, fontSize: 16, fontWeight: '600' },
+}))
 
 const GLASS_AVAILABLE = Platform.OS === 'ios' && isLiquidGlassAvailable()
 
@@ -670,7 +699,7 @@ export function GlassSurface({
       <GlassView
         glassEffectStyle="regular"
         tintColor={tint}
-        colorScheme="dark"
+        colorScheme={isLightTheme() ? 'light' : 'dark'}
         style={[style, glassSurfaceStyles.glass]}
       >
         {children}
@@ -680,12 +709,12 @@ export function GlassSurface({
   return <View style={style}>{children}</View>
 }
 
-const glassSurfaceStyles = StyleSheet.create({
+const glassSurfaceStyles = themedStyles((c) => StyleSheet.create({
   glass: {
     backgroundColor: 'transparent',
     borderWidth: 0,
   },
-})
+}))
 
 export function GlassDayCell({
   tint,
@@ -707,7 +736,7 @@ export function GlassDayCell({
       <GlassView
         glassEffectStyle="regular"
         tintColor={tint}
-        colorScheme="dark"
+        colorScheme={isLightTheme() ? 'light' : 'dark'}
         style={[glassCellStyles.cell, style]}
       >
         <Pressable disabled={disabled} onPress={onPress} onLongPress={onLongPress} style={glassCellStyles.inner}>
@@ -728,7 +757,7 @@ export function GlassDayCell({
   )
 }
 
-const glassCellStyles = StyleSheet.create({
+const glassCellStyles = themedStyles((c) => StyleSheet.create({
   cell: {
     borderRadius: 10,
     marginBottom: 3,
@@ -738,9 +767,9 @@ const glassCellStyles = StyleSheet.create({
     width: '13.5%',
   },
   fallback: {
-    backgroundColor: colors.card,
-    borderColor: colors.borderLight,
+    backgroundColor: c.card,
+    borderColor: c.borderLight,
     borderWidth: StyleSheet.hairlineWidth,
   },
   inner: { flex: 1 },
-})
+}))

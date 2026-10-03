@@ -12,6 +12,7 @@ import { API_BASE } from '../config'
 import { emitEvent, onEvent } from '../utils/events'
 import { playAlertBeep, playToastSound } from '../utils/alertSound'
 import { initNotifications, notifyToast } from '../utils/notifications'
+import { addMessage } from '../utils/messages'
 
 interface Toast {
   id: number
@@ -93,6 +94,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         const data = JSON.parse(e.data ?? '') as { message: string; silent?: boolean }
         if (!data.silent) playToastSound('success')
         notifyToast(data.message, 'success')
+        addMessage('success', data.message)
         success(data.message)
       } catch {
         // ignore malformed events
@@ -103,6 +105,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         const data = JSON.parse(e.data ?? '') as { message: string; persistent?: boolean }
         playToastSound('error')
         notifyToast(data.message, 'error')
+        addMessage('error', data.message)
         error(data.message, Boolean(data.persistent))
       } catch {
         // ignore malformed events
@@ -113,6 +116,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         const data = JSON.parse(e.data ?? '') as { message: string; persistent?: boolean }
         playToastSound('warning')
         notifyToast(data.message, 'warning')
+        addMessage('warning', data.message)
         addToast(data.message, 'warning', Boolean(data.persistent))
       } catch {
         // ignore malformed events

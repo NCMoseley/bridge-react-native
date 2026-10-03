@@ -9,6 +9,7 @@ import {
   Spinner,
   colors,
   pnlColor,
+  themedStyles,
 } from '../components/ui'
 import { JournalDate } from '../components/charts'
 import {
@@ -448,27 +449,27 @@ export default function AccountPnlScreen() {
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => StyleSheet.create({
   barTrack: {
-    backgroundColor: colors.bg,
+    backgroundColor: c.bg,
     borderRadius: 999,
     height: 8,
     marginVertical: 4,
     overflow: 'hidden',
   },
-  container: { backgroundColor: colors.bg, flex: 1 },
-  dim: { color: colors.muted, fontSize: 12 },
-  dimSmall: { color: colors.faint, fontSize: 11 },
+  container: { backgroundColor: c.bg, flex: 1 },
+  dim: { color: c.muted, fontSize: 12 },
+  dimSmall: { color: c.faint, fontSize: 11 },
   statGrid: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 8 },
   statItem: { marginBottom: 12, marginRight: 24 },
-  statValue: { color: colors.text, fontSize: 18, fontWeight: '800' },
-  title: { color: colors.text, fontSize: 18, fontWeight: '800' },
+  statValue: { color: c.text, fontSize: 18, fontWeight: '800' },
+  title: { color: c.text, fontSize: 18, fontWeight: '800' },
   tradeRow: {
-    borderTopColor: colors.border,
+    borderTopColor: c.border,
     borderTopWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
     gap: 8,
     paddingVertical: 8,
   },
-  value: { color: colors.text, fontSize: 13, fontWeight: '600' },
-})
+  value: { color: c.text, fontSize: 13, fontWeight: '600' },
+}))

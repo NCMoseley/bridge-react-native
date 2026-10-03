@@ -21,6 +21,7 @@ import {
   Spinner,
   Stat,
   colors,
+  themedStyles,
 } from '../../components/ui'
 import type {
   AlertActivityFilter,
@@ -372,31 +373,31 @@ export default function AlertsScreen() {
   )
 }
 
-const styles = StyleSheet.create({
-  alertAction: { color: colors.accent, fontSize: 12, fontWeight: '700', textTransform: 'uppercase' },
+const styles = themedStyles((c) => StyleSheet.create({
+  alertAction: { color: c.accent, fontSize: 12, fontWeight: '700', textTransform: 'uppercase' },
   alertRow: {
-    backgroundColor: colors.card,
-    borderColor: colors.border,
+    backgroundColor: c.card,
+    borderColor: c.border,
     borderRadius: 10,
     borderWidth: 1,
     flexDirection: 'row',
     marginBottom: 8,
     padding: 12,
   },
-  alertTitle: { color: colors.text, fontSize: 14, fontWeight: '700' },
-  container: { backgroundColor: colors.bg, flex: 1 },
-  dim: { color: colors.muted, fontSize: 12 },
-  dimCenter: { color: colors.muted, fontSize: 13, paddingVertical: 30, textAlign: 'center' },
-  dimSmall: { color: colors.muted, fontSize: 11 },
+  alertTitle: { color: c.text, fontSize: 14, fontWeight: '700' },
+  container: { backgroundColor: c.bg, flex: 1 },
+  dim: { color: c.muted, fontSize: 12 },
+  dimCenter: { color: c.muted, fontSize: 13, paddingVertical: 30, textAlign: 'center' },
+  dimSmall: { color: c.muted, fontSize: 11 },
   filterCard: {
-    backgroundColor: colors.card,
-    borderColor: colors.border,
+    backgroundColor: c.card,
+    borderColor: c.border,
     borderRadius: 10,
     borderWidth: 1,
     marginBottom: 10,
     padding: 12,
   },
-  json: { color: colors.text, fontFamily: 'Menlo', fontSize: 10 },
+  json: { color: c.text, fontFamily: 'Menlo', fontSize: 10 },
   modalBackdrop: {
     alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.7)',
@@ -405,24 +406,24 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   modalCard: {
-    backgroundColor: colors.card,
-    borderColor: colors.border,
+    backgroundColor: c.card,
+    borderColor: c.border,
     borderRadius: 12,
     borderWidth: 1,
     maxHeight: '85%',
     padding: 16,
     width: '100%',
   },
-  modalTitle: { color: colors.text, fontSize: 15, fontWeight: '700', marginBottom: 10 },
+  modalTitle: { color: c.text, fontSize: 15, fontWeight: '700', marginBottom: 10 },
   nameChip: {
-    backgroundColor: colors.bg,
-    borderColor: colors.border,
+    backgroundColor: c.bg,
+    borderColor: c.border,
     borderRadius: 999,
     borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 4,
   },
-  nameChipText: { color: colors.muted, fontSize: 11 },
+  nameChipText: { color: c.muted, fontSize: 11 },
   pagerRow: {
     alignItems: 'center',
     flexDirection: 'row',
@@ -430,4 +431,4 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   summaryRow: { flexDirection: 'row', gap: 16, marginBottom: 10 },
-})
+}))

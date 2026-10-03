@@ -3,13 +3,18 @@ import { Stack, useRouter, useSegments } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { AuthProvider, useAuth } from '../context/AuthContext'
 import { ToastProvider } from '../context/ToastContext'
-import { colors, Spinner } from '../components/ui'
+import { colors, setTheme, Spinner } from '../components/ui'
 import { hydrateStorage } from '../utils/storage'
+import { currentTheme } from '../utils/theme'
+import { onEvent } from '../utils/events'
 
 function AuthGate() {
   const [hydrated, setHydrated] = useState(false)
   useEffect(() => {
-    void hydrateStorage().then(() => setHydrated(true))
+    void hydrateStorage().then(() => {
+      setTheme(currentTheme())
+      setHydrated(true)
+    })
   }, [])
   const { user, loading } = useAuth()
   const segments = useSegments()
@@ -51,6 +56,7 @@ function AuthGate() {
           name="category-calendar"
           options={{ title: 'Category Calendar' }}
         />
+        <Stack.Screen name="messages" options={{ title: 'Messages' }} />
         <Stack.Screen name="debugging" options={{ title: 'Debugging' }} />
         <Stack.Screen name="account-pnl" options={{ title: 'P&L Review' }} />
       </Stack>
@@ -59,10 +65,12 @@ function AuthGate() {
 }
 
 export default function RootLayout() {
+  const [themeVersion, setThemeVersion] = useState(0)
+  useEffect(() => onEvent('theme:changed', () => setThemeVersion((v) => v + 1)), [])
   return (
     <AuthProvider>
       <ToastProvider>
-        <AuthGate />
+        <AuthGate key={themeVersion} />
       </ToastProvider>
     </AuthProvider>
   )
