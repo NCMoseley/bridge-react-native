@@ -26,6 +26,12 @@
     "plugins": [
       "expo-router"
     ],
-    "scheme": "bridge"
+    "scheme": "bridge",
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "127252c3-6306-4ad3-9f0b-b44978cc7f59"
+      }
+    }
   }
 }
