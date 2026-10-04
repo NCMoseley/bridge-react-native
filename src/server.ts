@@ -11544,15 +11544,22 @@ export function createApp(
       return;
     }
     if (!config?.breakEvenEnabled) return;
+    // Divergence compares config against legs the strategy actually owns — a
+    // plausibility-matched ownerless leg isn't the template's leg, and
+    // comparing it produces nonsense diffs (a same-instrument arm reads as
+    // tens of thousands of ticks off). No owner legs → nothing to compare.
+    const ownedStop = ownedLegs.find((r) => typeof r.stopPrice === 'number' && r.stopPrice !== 0);
+    const ownedTarget = ownedLegs.find((r) => typeof r.limitPrice === 'number' && r.limitPrice !== 0);
+    if (!ownedStop && !ownedTarget) return;
     const expectedSl = config.stopLossStyle === 'ticks' ? Math.round(config.stopLossTicksCents / 100) : undefined;
     const expectedTp = config.takeProfitStyle === 'ticks' ? Math.round(config.takeProfitTicksCents / 100) : undefined;
     const mismatches: string[] = [];
-    if (stopLeg && expectedSl != null) {
-      const implied = Math.round(Math.abs(entryPx - stopLeg.stopPrice!) / tickSize);
+    if (ownedStop && expectedSl != null) {
+      const implied = Math.round(Math.abs(entryPx - ownedStop.stopPrice!) / tickSize);
       if (Math.abs(implied - expectedSl) > 1) mismatches.push(`SL ${implied}t vs config ${expectedSl}t`);
     }
-    if (targetLeg && expectedTp != null) {
-      const implied = Math.round(Math.abs(targetLeg.limitPrice! - entryPx) / tickSize);
+    if (ownedTarget && expectedTp != null) {
+      const implied = Math.round(Math.abs(ownedTarget.limitPrice! - entryPx) / tickSize);
       if (Math.abs(implied - expectedTp) > 1) mismatches.push(`TP ${implied}t vs config ${expectedTp}t`);
     }
     if (mismatches.length === 0) return;
