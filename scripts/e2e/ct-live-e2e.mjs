@@ -549,8 +549,11 @@ await mockCmd({ command: 'place', account: 'Sim101', instrument: 'ES1!', action:
 await mockCmd({ command: 'place', account: 'Sim101', instrument: 'ES1!', action: 'sell', order_type: 'stopmarket', stop_price: 4480, qty: 1, order_id: `${pairTag}-short`, oco_id: `${pairTag}-oco`, atm_strategy: 'E2E-PAIRED-STRAT' });
 await sweep(); await sweep();
 const orphanLog = db.prepare("SELECT data_json FROM bridge_logs WHERE data_json LIKE ? ORDER BY rowid DESC LIMIT 20").all('%orphaned bracket leg%');
-check('armed OCO pair not flagged as orphan',
-  !orphanLog.some((r) => String(r.data_json).includes(pairTag)),
+// An UNTRACKED pair is still orphan-worthy: healthy arms are wire-claimed
+// earlier, so anything reaching this filter has no open ledger/monitor row —
+// a stale arm pair at the broker is exactly what the warning is for.
+check('untracked OCO pair flagged as orphan',
+  orphanLog.some((r) => String(r.data_json).includes(pairTag)),
   orphanLog.map((r) => String(r.data_json).slice(0, 120)).join(' | '));
 // A solo strategy-owned Working order (partner gone) still warns — the pair
 // exclusion must not swallow genuine orphans.

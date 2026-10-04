@@ -11706,15 +11706,6 @@ export function createApp(
           if (!row.ownerStrategy?.name && !row.ownerStrategy?.displayName) return false;
           if ([row.id, row.orderId, row.userData, row.automatedTradingOrderId, row.name]
             .some((v) => typeof v === 'string' && openWireIds.has(v))) return false;
-          // Armed arm pairs aren't orphans: a strategy-owned ENTRY leg in an
-          // opposite-action Working OCO pair is an armed range, not a bracket
-          // leg left behind. A real orphan's partner is Filled/Cancelled (or
-          // never existed), so it can't satisfy this pairing.
-          if (row.ocoId && orders.some((other) => other !== row
-            && other.ocoId === row.ocoId
-            && String(other.orderState ?? '').toLowerCase() === 'working'
-            && String(other.instrument ?? '') === String(row.instrument ?? '')
-            && String(other.orderAction ?? '').toLowerCase() !== String(row.orderAction ?? '').toLowerCase())) return false;
           const inst = String(row.instrument ?? '');
           const root = continuousTickerRoot(inst);
           return inst === '' || !root || !positionDirByRoot.has(root);
