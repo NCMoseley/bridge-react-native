@@ -35,6 +35,13 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="trades"
+        options={{
+          title: 'Trades',
+          tabBarIcon: ({ color, size }) => <Ionicons name="swap-horizontal" color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
         name="accounts"
         options={{
           title: 'Accounts',
@@ -48,13 +55,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, size }) => <Ionicons name="receipt" color={color} size={size} />,
         }}
       />
-      <Tabs.Screen
-        name="ranges"
-        options={{
-          title: 'Ranges',
-          tabBarIcon: ({ color, size }) => <Ionicons name="stats-chart" color={color} size={size} />,
-        }}
-      />
+      <Tabs.Screen name="ranges" options={{ href: null }} />
       <Tabs.Screen name="settings" options={{ href: null }} />
       <Tabs.Screen name="alerts" options={{ href: null }} />
       <Tabs.Screen name="monitoring" options={{ href: null }} />

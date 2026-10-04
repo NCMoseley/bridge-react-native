@@ -9,6 +9,7 @@ const LINKS = [
   { href: '/messages', label: 'Messages', desc: 'Toasts & trade alerts history' },
   { href: '/range-calendar', label: 'Range Review', desc: 'Per-range monthly P&L' },
   { href: '/category-calendar', label: 'Category Calendar', desc: 'Per-model monthly P&L' },
+  { href: '/ranges', label: 'Ranges', desc: 'Tracked ranges, models, performance' },
   { href: '/settings', label: 'Settings', desc: 'Route subscriptions & extension' },
 ] as const
 
