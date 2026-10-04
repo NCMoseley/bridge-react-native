@@ -540,7 +540,30 @@ await sweep(); await sweep();
 const legMissing2 = db.prepare("SELECT COUNT(*) n FROM bridge_logs WHERE data_json LIKE ? AND data_json LIKE ?").get('%crossTradeAtmMissing%', `%${legArm2}%`);
 check('expected-price ownerless leg counts as protection (no warning)', legMissing2.n === 0, legMissing2);
 
-// --- Phase 22: negative controls — no warnings where state is consistent ---
+// --- Phase 22: armed OCO arm-pairs are NOT orphans — a strategy-owned Working
+// entry leg in an opposite-action Working OCO pair is an armed range, not a
+// bracket leg left behind. Instrument has no position on purpose.
+console.log('\n=== armed OCO pair: strategy-owned entry legs stay quiet ===');
+const pairTag = `e2e-armedpair-${TAG}`;
+await mockCmd({ command: 'place', account: 'Sim101', instrument: 'ES1!', action: 'buy', order_type: 'stopmarket', stop_price: 4500, qty: 1, order_id: `${pairTag}-long`, oco_id: `${pairTag}-oco`, atm_strategy: 'E2E-PAIRED-STRAT' });
+await mockCmd({ command: 'place', account: 'Sim101', instrument: 'ES1!', action: 'sell', order_type: 'stopmarket', stop_price: 4480, qty: 1, order_id: `${pairTag}-short`, oco_id: `${pairTag}-oco`, atm_strategy: 'E2E-PAIRED-STRAT' });
+await sweep(); await sweep();
+const orphanLog = db.prepare("SELECT data_json FROM bridge_logs WHERE data_json LIKE ? ORDER BY rowid DESC LIMIT 20").all('%orphaned bracket leg%');
+check('armed OCO pair not flagged as orphan',
+  !orphanLog.some((r) => String(r.data_json).includes(pairTag)),
+  orphanLog.map((r) => String(r.data_json).slice(0, 120)).join(' | '));
+// A solo strategy-owned Working order (partner gone) still warns — the pair
+// exclusion must not swallow genuine orphans.
+const soloTag = `e2e-soloorphan-${TAG}`;
+await mockCmd({ command: 'place', account: 'Sim101', instrument: 'ES1!', action: 'sell', order_type: 'stopmarket', stop_price: 4470, qty: 1, order_id: `${soloTag}-orphan`, oco_id: `${soloTag}-oco`, atm_strategy: 'E2E-PAIRED-STRAT' });
+await sweep(); await sweep();
+const orphanLog2 = db.prepare("SELECT data_json FROM bridge_logs WHERE data_json LIKE ? ORDER BY rowid DESC LIMIT 20").all('%orphaned bracket leg%');
+check('solo strategy-owned order still flags as orphan',
+  orphanLog2.some((r) => String(r.data_json).includes(soloTag)),
+  orphanLog2.map((r) => String(r.data_json).slice(0, 120)).join(' | '));
+await mockCmd({ command: 'cancelorders', account: 'Sim101', instrument: 'ES1!' });
+
+// --- Phase 23: negative controls — no warnings where state is consistent ---
 console.log('\n=== negative controls: claimed roots / armed brackets stay quiet ===');
 // MGC1! position is claimed by the PartFilled bracket (monitor filled) — the
 // orphan check must not fire for a root an open bracket owns.

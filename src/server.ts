@@ -11389,43 +11389,6 @@ export function createApp(
       }
     });
 
-    // Orphan detection: an ATM-owned Working order with no open position on
-    // its instrument is a bracket leg left behind (e.g., a TP that outlived
-    // a breakeven stop-out). Entry orders we dispatched are excluded via
-    // wire-id match; orders without an owner strategy are skipped — they may
-    // be the user's own manual orders. Read-only: warn, never cancel.
-    const posRead = await fetchCrossTradePositions(ctDestination);
-    if (posRead.ok) {
-      const openInstruments = new Set(
-        ((posRead.data?.positions ?? []) as CrossTradePositionRow[])
-          .filter((p) => String(p.marketPosition ?? '').toLowerCase() !== 'flat' && (p.quantity ?? 0) !== 0)
-          .map((p) => String(p.instrument ?? '')),
-      );
-      const orphans = nt8Rows.filter((row) => {
-        if (String(row.orderState ?? '').toLowerCase() !== 'working') return false;
-        if (!row.ownerStrategy?.name && !row.ownerStrategy?.displayName) return false;
-        if ([row.id, row.orderId, row.userData, row.automatedTradingOrderId, row.name]
-          .some((v) => typeof v === 'string' && openWireIds.has(v))) return false;
-        // Armed arm pairs aren't orphans: a strategy-owned ENTRY leg in an
-        // opposite-action Working OCO pair is an armed range, not a bracket
-        // leg left behind. A real orphan's partner is Filled/Cancelled (or
-        // never existed), so it can't satisfy this pairing.
-        if (row.ocoId && nt8Rows.some((other) => other !== row
-          && other.ocoId === row.ocoId
-          && String(other.orderState ?? '').toLowerCase() === 'working'
-          && String(other.instrument ?? '') === String(row.instrument ?? '')
-          && String(other.orderAction ?? '').toLowerCase() !== String(row.orderAction ?? '').toLowerCase())) return false;
-        const inst = String(row.instrument ?? '');
-        return inst === '' || !openInstruments.has(inst);
-      });
-      if (orphans.length) {
-        const label = orphans.map((o) => String(o.name ?? o.orderId ?? o.id)).slice(0, 4).join(', ');
-        const message = `NT8 book shows ${orphans.length} working order(s) with no open position — possible orphaned bracket leg(s): ${label}${orphans.length > 4 ? '…' : ''}`;
-        console.warn(JSON.stringify({ level: 'warn', event: 'crossTradeOrphanOrders', accountId: account.id, count: orphans.length, orders: orphans.map((o) => o.id) }));
-        emitToUser(account.userId, 'log:bridge', { category: 'crosstrade', accountId: account.id, accountName: account.name, message });
-        emitToUser(account.userId, 'toast:warning', { persistent: true, message: `${account.name}: ${message}` });
-      }
-    }
   };
 
   // Debounced per account: a burst of sends collapses to a single book read.
@@ -11717,6 +11680,56 @@ export function createApp(
         if (String(p.marketPosition ?? '').toLowerCase() === 'flat' || (p.quantity ?? 0) === 0) continue;
         const root = continuousTickerRoot(String(p.instrument ?? ''));
         if (root) positionDirByRoot.set(root, String(p.marketPosition ?? '').toLowerCase());
+      }
+      // Orphan bracket legs: a strategy-owned Working order on an instrument
+      // with no open position is a leg left behind (e.g., a TP that outlived
+      // a breakeven stop-out). Orders we dispatched are excluded via wire-id
+      // match; ownerless rows are skipped — they may be manual orders.
+      // Read-only: warn, never cancel. Runs in the sweep (not the post-send
+      // verify) so armed but quiet accounts stay watched.
+      {
+        const openWireIds = new Set<string>();
+        for (const o of database.listOpenBrokerOrdersByAccount(account.id)) {
+          if (o.destination !== 'crosstrade' || (o.action !== 'buy' && o.action !== 'sell')) continue;
+          if (o.bracketId) openWireIds.add(o.bracketId);
+          if (o.orderId) openWireIds.add(ctWireOrderId(o.orderId));
+        }
+        const orphans = orders.filter((row) => {
+          if (String(row.orderState ?? '').toLowerCase() !== 'working') return false;
+          if (!row.ownerStrategy?.name && !row.ownerStrategy?.displayName) return false;
+          if ([row.id, row.orderId, row.userData, row.automatedTradingOrderId, row.name]
+            .some((v) => typeof v === 'string' && openWireIds.has(v))) return false;
+          // Armed arm pairs aren't orphans: a strategy-owned ENTRY leg in an
+          // opposite-action Working OCO pair is an armed range, not a bracket
+          // leg left behind. A real orphan's partner is Filled/Cancelled (or
+          // never existed), so it can't satisfy this pairing.
+          if (row.ocoId && orders.some((other) => other !== row
+            && other.ocoId === row.ocoId
+            && String(other.orderState ?? '').toLowerCase() === 'working'
+            && String(other.instrument ?? '') === String(row.instrument ?? '')
+            && String(other.orderAction ?? '').toLowerCase() !== String(row.orderAction ?? '').toLowerCase())) return false;
+          const inst = String(row.instrument ?? '');
+          const root = continuousTickerRoot(inst);
+          return inst === '' || !root || !positionDirByRoot.has(root);
+        });
+        if (orphans.length) {
+          const label = orphans.map((o) => String(o.name ?? o.orderId ?? o.id)).slice(0, 4).join(', ');
+          const message = `NT8 book shows ${orphans.length} working order(s) with no open position — possible orphaned bracket leg(s): ${label}${orphans.length > 4 ? '…' : ''}`;
+          // Dedup on the orphan id set — a stalled leg would otherwise warn
+          // once per sweep tick.
+          const orphanKey = `orphans:${orphans.map((o) => o.id).sort().join(',')}`;
+          if (!database.hasBridgeLogEntry({
+            userId: account.userId, category: 'crosstrade', event: 'crossTradeOrphanOrders',
+            dedupKey: orphanKey, since: new Date(Date.now() - 24 * 3600_000).toISOString(),
+          })) {
+            console.warn(JSON.stringify({ level: 'warn', event: 'crossTradeOrphanOrders', accountId: account.id, count: orphans.length, orders: orphans.map((o) => o.id) }));
+            database.createBridgeLog(account.userId, 'crosstrade', {
+              event: 'crossTradeOrphanOrders', dedupKey: orphanKey,
+              accountId: account.id, accountName: account.name, message,
+            });
+            emitToUser(account.userId, 'toast:warning', { persistent: true, message: `${account.name}: ${message}` });
+          }
+        }
       }
       // Book instrument per row — destinations transform tickers
       // (micros_only: NQ→MNQ); the alert ticker is not what NT8 holds.
