@@ -11408,9 +11408,16 @@ export function createApp(
         if (openMonitorRoots.has(root)) { ctOrphanWarned.delete(orphanKey); continue; }
         if (ctOrphanWarned.has(orphanKey)) continue;
         ctOrphanWarned.add(orphanKey);
+        // Persisted dedup — restarts re-warn every still-open position since
+        // the in-memory set resets. Gate on the log row (46h, under the 48h
+        // bridge_logs retention) so only genuinely new orphans notify.
+        if (database.hasBridgeLogEntry({
+          userId: account.userId, category: 'crosstrade', event: 'crossTradeOrphanPosition',
+          dedupKey: `orphanpos:${root}`, since: new Date(Date.now() - 46 * 3600_000).toISOString(),
+        })) continue;
         const reason = `live ${dir} ${root} position has no open bracket — manual or broker-side order the bridge never saw`;
         database.createBridgeLog(account.userId, 'crosstrade', {
-          event: 'crossTradeOrphanPosition', accountId: account.id, reason,
+          event: 'crossTradeOrphanPosition', accountId: account.id, reason, dedupKey: `orphanpos:${root}`,
         });
         emitToUser(account.userId, 'toast:warning', { persistent: true, message: `CrossTrade sweep: ${reason}` });
       }
@@ -11432,9 +11439,15 @@ export function createApp(
         const fillKey = `orphanfill:${account.id}:${String(o.id)}`;
         if (ctOrphanWarned.has(fillKey)) continue;
         ctOrphanWarned.add(fillKey);
+        // Same persisted dedup — a process restart re-reports every historic
+        // fill in the NT8 book otherwise (bridge_logs retention is 48h).
+        if (database.hasBridgeLogEntry({
+          userId: account.userId, category: 'crosstrade', event: 'crossTradeOrphanFill',
+          dedupKey: fillKey, since: new Date(Date.now() - 46 * 3600_000).toISOString(),
+        })) continue;
         const reason = `NT8 fill ${String(o.id)} ${String(o.orderAction)} ${o.quantity ?? '?'} ${String(o.instrument)} has no bridge bookkeeping — broker-side trade with no attributable bracket`;
         database.createBridgeLog(account.userId, 'crosstrade', {
-          event: 'crossTradeOrphanFill', accountId: account.id, reason,
+          event: 'crossTradeOrphanFill', accountId: account.id, reason, dedupKey: fillKey,
         });
         emitToUser(account.userId, 'toast:warning', { persistent: true, message: `CrossTrade sweep: ${reason}` });
       }
@@ -13938,24 +13951,43 @@ export function createApp(
   const ctSweepEnabled = process.env.CT_SWEEP_ENABLED !== undefined
     ? /^(1|true|yes)$/i.test(process.env.CT_SWEEP_ENABLED)
     : process.env.NODE_ENV === 'production';
+  // Adaptive cadence: every CT_SWEEP_INTERVAL_MS while there is open work
+  // (unresolved CT ledger rows or an armed/filled bracket on a CT-configured
+  // account), CT_SWEEP_IDLE_MS when flat — idle sweeps exist mainly to catch
+  // broker-side activity, which doesn't need minute cadence.
+  const CT_SWEEP_IDLE_MS = Math.max(CT_SWEEP_INTERVAL_MS, Number(process.env.CT_SWEEP_IDLE_MS) || 15 * 60_000);
+  const ctSweepHasOpenWork = (): boolean => {
+    if (database.listUnresolvedCrossTradeOrdersBefore(new Date(Date.now() + 1_000).toISOString()).length > 0) return true;
+    for (const accountId of database.listAccountsWithOpenMonitorRows()) {
+      const dest = database.getTradersPostAccountDestination(accountId);
+      if (isCrossTradeConfigured(dest)) return true;
+    }
+    return false;
+  };
   let ctSweepInFlight = false;
-  const ctSweep = ctSweepEnabled
-    ? setInterval(() => {
-      if (ctSweepInFlight) return;
-      ctSweepInFlight = true;
-      void sweepUncertainCrossTradeOrders()
-        .catch((error) => {
-          console.warn(JSON.stringify({ level: 'warn', event: 'crossTradeSweepError', error: error instanceof Error ? error.message : String(error) }));
-        })
-        .finally(() => { ctSweepInFlight = false; });
-    }, CT_SWEEP_INTERVAL_MS)
-    : undefined;
+  let ctSweepTimer: ReturnType<typeof setTimeout> | undefined;
+  const ctSweepTick = (): void => {
+    if (ctSweepInFlight) {
+      ctSweepTimer = setTimeout(ctSweepTick, CT_SWEEP_INTERVAL_MS);
+      return;
+    }
+    ctSweepInFlight = true;
+    void sweepUncertainCrossTradeOrders()
+      .catch((error) => {
+        console.warn(JSON.stringify({ level: 'warn', event: 'crossTradeSweepError', error: error instanceof Error ? error.message : String(error) }));
+      })
+      .finally(() => {
+        ctSweepInFlight = false;
+        ctSweepTimer = setTimeout(ctSweepTick, ctSweepHasOpenWork() ? CT_SWEEP_INTERVAL_MS : CT_SWEEP_IDLE_MS);
+      });
+  };
+  if (ctSweepEnabled) ctSweepTimer = setTimeout(ctSweepTick, CT_SWEEP_INTERVAL_MS);
   if (!ctSweepEnabled) {
     console.info(JSON.stringify({ level: 'info', event: 'crossTradeSweepDisabled', reason: 'non-production environment', override: 'CT_SWEEP_ENABLED=1 to force' }));
   }
   app.locals.dispose = () => {
     clearInterval(scheduler);
-    if (ctSweep) clearInterval(ctSweep);
+    if (ctSweepTimer) clearTimeout(ctSweepTimer);
     for (const timer of ctVerifyTimers.values()) clearTimeout(timer);
     ctVerifyTimers.clear();
   };

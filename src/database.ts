@@ -6189,6 +6189,7 @@ export class Database {
     category: string;
     event?: string;
     bracketId?: string;
+    dedupKey?: string;
     since: string;
   }): boolean {
     return Boolean(this.db.prepare(
@@ -6196,11 +6197,13 @@ export class Database {
        WHERE user_id = ? AND category = ? AND timestamp >= ?
          AND (? IS NULL OR json_extract(data_json, '$.event') = ?)
          AND (? IS NULL OR json_extract(data_json, '$.bracketId') = ?)
+         AND (? IS NULL OR json_extract(data_json, '$.dedupKey') = ?)
        LIMIT 1`,
     ).get(
       input.userId, input.category, input.since,
       input.event ?? null, input.event ?? null,
       input.bracketId ?? null, input.bracketId ?? null,
+      input.dedupKey ?? null, input.dedupKey ?? null,
     ));
   }
 
@@ -6747,6 +6750,15 @@ export class Database {
        WHERE state = 'closed' AND last_event_type = 'trade_closed'
          AND last_event_id NOT LIKE 'ct-flat-%' AND updated_at > ?`,
     ).all(cutoffIso) as Array<{ account_id: string }>;
+    return rows.map((row) => row.account_id);
+  }
+
+  // Accounts with an armed or filled bracket — the sweep's "open orders"
+  // signal for adaptive cadence.
+  listAccountsWithOpenMonitorRows(): string[] {
+    const rows = this.db.prepare(
+      `SELECT DISTINCT account_id FROM bracket_monitor WHERE state IN ('armed', 'filled')`,
+    ).all() as Array<{ account_id: string }>;
     return rows.map((row) => row.account_id);
   }
 
