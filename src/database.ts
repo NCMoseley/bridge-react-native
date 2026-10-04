@@ -199,6 +199,7 @@ interface ProxyDeliveryRow {
   traderspost_enabled: number;
   draft_id: string | null;
   qualified_trade_id: string | null;
+  resumable: number;
   status: ProxyDeliveryStatus;
   created_at: string;
 }
@@ -795,6 +796,16 @@ export class Database {
         data_json TEXT NOT NULL
       ) STRICT;
 
+      CREATE TABLE IF NOT EXISTS push_tokens (
+        token TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      ) STRICT;
+
+      CREATE INDEX IF NOT EXISTS push_tokens_by_user
+        ON push_tokens (user_id);
+
       CREATE TABLE IF NOT EXISTS process_runs (
         id TEXT PRIMARY KEY,
         started_at TEXT NOT NULL,
@@ -1264,6 +1275,9 @@ export class Database {
     if (!columns.some((column) => column.name === 'qualified_trade_id')) {
       this.db.prepare('ALTER TABLE proxy_deliveries ADD COLUMN qualified_trade_id TEXT').run();
     }
+    if (!columns.some((column) => column.name === 'resumable')) {
+      this.db.prepare('ALTER TABLE proxy_deliveries ADD COLUMN resumable INTEGER NOT NULL DEFAULT 0').run();
+    }
   }
 
   private ensureBracketMonitorColumns(): void {
@@ -1435,6 +1449,7 @@ export class Database {
         traderspost_enabled INTEGER NOT NULL CHECK (traderspost_enabled IN (0, 1)),
         draft_id TEXT REFERENCES order_drafts(id) ON DELETE SET NULL,
         qualified_trade_id TEXT,
+        resumable INTEGER NOT NULL DEFAULT 0,
         status TEXT NOT NULL,
         created_at TEXT NOT NULL
       ) STRICT;
@@ -1442,10 +1457,10 @@ export class Database {
     this.db.prepare(
       `INSERT INTO proxy_deliveries_repaired (
         id, proxy_alert_id, range_route_id, user_id, account_id, extension_enabled, traderspost_enabled,
-        draft_id, qualified_trade_id, status, created_at
+        draft_id, qualified_trade_id, resumable, status, created_at
       )
       SELECT id, proxy_alert_id, range_route_id, user_id, account_id, extension_enabled, traderspost_enabled,
-        draft_id, qualified_trade_id, status, created_at
+        draft_id, qualified_trade_id, COALESCE(resumable, 0), status, created_at
       FROM proxy_deliveries`,
     ).run();
     this.db.exec('DROP TABLE proxy_deliveries');
@@ -4503,8 +4518,8 @@ export class Database {
     this.db.prepare(
       `INSERT INTO proxy_deliveries (
         id, proxy_alert_id, range_route_id, user_id, account_id, extension_enabled, traderspost_enabled,
-        draft_id, qualified_trade_id, status, created_at
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        draft_id, qualified_trade_id, resumable, status, created_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       delivery.id,
       delivery.proxyAlertId,
@@ -4515,6 +4530,7 @@ export class Database {
       Number(delivery.traderspostEnabled),
       delivery.draftId ?? null,
       delivery.qualifiedTradeId ?? null,
+      delivery.resumable ? 1 : 0,
       delivery.status,
       delivery.createdAt,
     );
@@ -4569,6 +4585,28 @@ export class Database {
     ).run().changes;
     for (const { user_id } of interrupted) this.invalidateUserCache(user_id);
     return { deliveries, orders };
+  }
+
+  // Pending deliveries that provably never reached the wire — zero attempt
+  // rows AND no broker_orders ledger rows (a ledger row is upserted before
+  // every fetch, so its presence means a send was in flight when the process
+  // died: unknowable outcome → sweep fails it, never resend). Only lanes
+  // that lost a purely queued slot are safe to re-enqueue on boot.
+  listUnattemptedPendingDeliveries(): ProxyDelivery[] {
+    const rows = this.db.prepare(
+      `SELECT pd.*
+       FROM proxy_deliveries pd
+       WHERE pd.status IN ('pending_traderspost', 'extension_draft_created_and_pending_traderspost')
+         AND NOT EXISTS (
+           SELECT 1 FROM proxy_delivery_attempts a WHERE a.proxy_delivery_id = pd.id
+         )
+         AND pd.resumable = 1
+         AND NOT EXISTS (
+           SELECT 1 FROM broker_orders bo WHERE bo.proxy_delivery_id = pd.id
+         )
+       ORDER BY pd.created_at`,
+    ).all() as unknown as ProxyDeliveryRow[];
+    return rows.map((row) => this.toProxyDelivery(row));
   }
 
   listPendingTradersPostDeliveries(accountId: string): Array<{ id: string; ticker: string }> {
@@ -6162,6 +6200,24 @@ export class Database {
       success: Boolean(row.success),
       ...(row.error_text != null ? { errorText: row.error_text } : {}),
     }));
+  }
+
+  upsertPushToken(userId: string, token: string): void {
+    const now = new Date().toISOString();
+    this.db.prepare(
+      `INSERT INTO push_tokens (token, user_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT (token) DO UPDATE SET user_id = excluded.user_id, updated_at = excluded.updated_at`,
+    ).run(token, userId, now, now);
+  }
+
+  deletePushToken(userId: string, token: string): void {
+    this.db.prepare('DELETE FROM push_tokens WHERE token = ? AND user_id = ?').run(token, userId);
+  }
+
+  listPushTokens(userId: string): string[] {
+    return (this.db.prepare('SELECT token FROM push_tokens WHERE user_id = ?')
+      .all(userId) as Array<{ token: string }>).map((r) => r.token);
   }
 
   createBridgeLog(userId: string, category: string, data: Record<string, unknown>): BridgeLog {
@@ -8217,6 +8273,7 @@ export class Database {
       traderspostEnabled: Boolean(row.traderspost_enabled),
       ...(row.draft_id ? { draftId: row.draft_id } : {}),
       ...(row.qualified_trade_id ? { qualifiedTradeId: row.qualified_trade_id } : {}),
+      ...(row.resumable ? { resumable: true } : {}),
       status: row.status,
       createdAt: row.created_at,
     };

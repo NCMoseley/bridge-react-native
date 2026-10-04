@@ -160,6 +160,10 @@ export interface ProxyDelivery {
   traderspostEnabled: boolean;
   draftId?: string;
   qualifiedTradeId?: string;
+  // Only plain proxy fan-out deliveries are marked resumable — restart
+  // recovery replays JUST these; reapply-step, precise-TP, EOD/news, and
+  // safeguard deliveries keep their dedicated (guarded) paths.
+  resumable?: boolean;
   status: ProxyDeliveryStatus;
   createdAt: string;
 }

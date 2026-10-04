@@ -34,6 +34,10 @@ const env = {
   MOCK_BASE_URL: `http://127.0.0.1:${mockPort}`, PUBLIC_BASE_URL: `http://127.0.0.1:${bridgePort}`,
   ADMIN_API_KEY: randomUUID(), PROXY_WEBHOOK_SECRET: randomUUID(), SESSION_SECRET: randomUUID(),
   INITIAL_USER_PASSWORD: randomUUID(), ADMIN_USER_EMAIL: 'admin@e2e.local',
+  // Shrink lane-breaker cooldowns for the suite — the outage phase trips them
+  // for real (that's coverage), but production-scale 2s→25s backoffs would
+  // stretch the 503 storm past the driver's patience.
+  TP_BREAKER_BASE_MS: '100', TP_BREAKER_MAX_MS: '500',
 };
 const children = [];
 const start = (args, stdio = 'inherit') => {

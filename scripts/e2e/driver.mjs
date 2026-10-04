@@ -55,8 +55,12 @@ const waitFor = async (pred, timeoutMs = 30000, pollMs = 150) => {
 };
 
 const proxy = async (payload) => {
+  // PROXY_ASYNC=0 makes the bridge answer only after dispatch drains — during
+  // the outage phase, breaker cooldowns stretch that drain well past undici's
+  // default headers timeout, so cap explicitly high instead.
   const res = await fetch(`${BRIDGE}/proxy/${SECRET}`, {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(10 * 60 * 1000),
   });
   return { status: res.status, body: await res.json().catch(() => null) };
 };

@@ -54,12 +54,14 @@ let appInstance: ReturnType<typeof createApp> | undefined;
 function currentActivity() {
   const ring = (appInstance?.locals?.recentRequests as Array<Record<string, unknown>> | undefined) ?? [];
   const tail = ring.slice(-50);
+  const queues = (appInstance?.locals?.dispatchQueueStats?.() as Array<{ pending: number }> | undefined) ?? [];
   return {
     at: new Date().toISOString(),
     uptimeSec: Math.round(process.uptime()),
     pid: process.pid,
     requestCount: ring.length,
     inFlight: tail.filter((r) => r.statusCode === undefined).length,
+    queuedDispatches: queues.reduce((sum, q) => sum + (q.pending ?? 0), 0),
     recentRequests: tail,
   };
 }
@@ -157,8 +159,15 @@ app.listen(config.PORT, () => {
 });
 
 // Heartbeat doubles as an event-loop lag probe: the interval fires late when
-// the loop is blocked, so the drift is recorded alongside memory stats.
-const HEARTBEAT_MS = 60_000;
+// the loop is blocked, so the drift is recorded alongside memory stats. 15s
+// keeps the last-known-work snapshot fresh — for a hard kill (SIGKILL/OOM)
+// the heartbeat's copy is the only forensic record that survives.
+const HEARTBEAT_MS = Math.max(5_000, Number(process.env.HEARTBEAT_MS) || 15_000);
+// Pressure thresholds: warn BEFORE the kill. A hard kill leaves no trace —
+// these warnings are the pre-mortem breadcrumb in warnings_json.
+const LAG_WARN_MS = Math.max(1_000, Number(process.env.EVENT_LOOP_LAG_WARN_MS) || 5_000);
+const HEAP_WARN_RATIO = Math.min(0.99, Number(process.env.HEAP_WARN_RATIO) || 0.9);
+const RSS_WARN_BYTES = Math.max(64 * 1024 * 1024, Number(process.env.RSS_WARN_MB) * 1024 * 1024 || 400 * 1024 * 1024);
 let heartbeatExpected = Date.now() + HEARTBEAT_MS;
 setInterval(() => {
   const lag = Math.max(0, Date.now() - heartbeatExpected);
@@ -172,6 +181,15 @@ setInterval(() => {
       eventLoopLagMs: Math.round(lag),
     });
     database.updateProcessRunActivity(processRunId, currentActivity());
+    const heapRatio = usage.heapTotal > 0 ? usage.heapUsed / usage.heapTotal : 0;
+    const pressure: Array<{ name: string; message: string }> = [];
+    if (lag > LAG_WARN_MS) pressure.push({ name: 'EventLoopLag', message: `event loop lag ${Math.round(lag)}ms exceeded ${LAG_WARN_MS}ms` });
+    if (heapRatio > HEAP_WARN_RATIO) pressure.push({ name: 'HeapPressure', message: `heap ${Math.round(heapRatio * 100)}% full (${usage.heapUsed}/${usage.heapTotal} bytes)` });
+    if (usage.rss > RSS_WARN_BYTES) pressure.push({ name: 'RssPressure', message: `rss ${usage.rss} bytes exceeded ${RSS_WARN_BYTES}` });
+    for (const w of pressure) {
+      console.warn(JSON.stringify({ level: 'warn', event: 'processPressure', ...w }));
+      database.recordProcessWarning(processRunId, w);
+    }
   } catch {
     // Non-fatal: stdout heartbeat above still records memory.
   }

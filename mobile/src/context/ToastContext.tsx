@@ -88,36 +88,50 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     initNotifications()
     const source = new EventSource<'toast:success' | 'toast:error' | 'toast:warning' | 'journal:refresh' | 'log:bridge'>(
       `${API_BASE}/api/events/stream`,
+      // Session auth is cookie-based — without credentials the stream 401s
+      // silently and no toast/message/notification ever arrives.
+      { withCredentials: true },
     )
+    source.addEventListener('error', (e) => {
+      // eslint-disable-next-line no-console
+      console.warn('[toast] events stream error', e)
+    })
+    const withRange = (data: { message: string; rangeName?: string }) =>
+      data.rangeName && !data.message.includes(data.rangeName)
+        ? `[${data.rangeName}] ${data.message}`
+        : data.message
     const onStreamSuccess = (e: { data?: string | null }) => {
       try {
-        const data = JSON.parse(e.data ?? '') as { message: string; silent?: boolean }
+        const data = JSON.parse(e.data ?? '') as { message: string; silent?: boolean; rangeName?: string }
+        const message = withRange(data)
         if (!data.silent) playToastSound('success')
-        notifyToast(data.message, 'success')
-        addMessage('success', data.message)
-        success(data.message)
+        notifyToast(message, 'success')
+        addMessage('success', message)
+        success(message)
       } catch {
         // ignore malformed events
       }
     }
     const onStreamError = (e: { data?: string | null }) => {
       try {
-        const data = JSON.parse(e.data ?? '') as { message: string; persistent?: boolean }
+        const data = JSON.parse(e.data ?? '') as { message: string; persistent?: boolean; rangeName?: string }
+        const message = withRange(data)
         playToastSound('error')
-        notifyToast(data.message, 'error')
-        addMessage('error', data.message)
-        error(data.message, Boolean(data.persistent))
+        notifyToast(message, 'error')
+        addMessage('error', message)
+        error(message, Boolean(data.persistent))
       } catch {
         // ignore malformed events
       }
     }
     const onStreamWarning = (e: { data?: string | null }) => {
       try {
-        const data = JSON.parse(e.data ?? '') as { message: string; persistent?: boolean }
+        const data = JSON.parse(e.data ?? '') as { message: string; persistent?: boolean; rangeName?: string }
+        const message = withRange(data)
         playToastSound('warning')
-        notifyToast(data.message, 'warning')
-        addMessage('warning', data.message)
-        addToast(data.message, 'warning', Boolean(data.persistent))
+        notifyToast(message, 'warning')
+        addMessage('warning', message)
+        addToast(message, 'warning', Boolean(data.persistent))
       } catch {
         // ignore malformed events
       }

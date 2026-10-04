@@ -458,6 +458,14 @@ const isFlattenAction = (action: unknown): boolean =>
 
 const TRADERSPOST_TRANSPORT_RETRIES = 1;
 const TRADERSPOST_TRANSPORT_RETRY_DELAY_MS = 750;
+// Deferred retries re-enqueue the whole delivery at the BACK of the account
+// lane (setTimeout → fresh queue task). Same retryable set as the inline
+// retry — transport errors only, plus timeouts on flatten/cancel actions
+// which are safe to duplicate. Entry timeouts stay single-shot: an
+// acknowledged-but-uncertain entry must never risk a broker duplicate.
+// Attempt count is ledger-derived so the cap survives a task-chain retry.
+const TRADERSPOST_DEFERRED_RETRIES = 2;
+const TRADERSPOST_DEFERRED_RETRY_BASE_MS = 5_000;
 
 // The retry sleep must observe the same abort signals as the send — otherwise a
 // watchdog release during the delay still lets the retry fire while the account
@@ -697,6 +705,9 @@ interface AppOptions {
   adminUserEmail?: string;
   fetch?: typeof globalThis.fetch;
   traderspostHardTimeoutMs?: number;
+  // Base delay for deferred back-of-lane retries (defaults to
+  // TRADERSPOST_DEFERRED_RETRY_BASE_MS); tests shrink it.
+  traderspostDeferredRetryBaseMs?: number;
   traderspostQueueTaskTimeoutMs?: number;
   // Watchdog bound for each send slot on the per-account TradersPost rate
   // limiter (the inner queue inside forwardToTradersPost / flatten sends).
@@ -3322,6 +3333,53 @@ function findCtEntryRow(orders: CrossTradeOrderRow[], bracketId: string, action:
     .sort((a, b) => (Date.parse(String(b.time ?? '')) || 0) - (Date.parse(String(a.time ?? '')) || 0))[0];
 }
 
+const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
+
+// Remote-push fallback for toast events when the user has no live SSE stream
+// (mobile app closed). Fire-and-forget; dead tokens are pruned on
+// DeviceNotRegistered receipts.
+async function sendExpoPush(
+  database: Database,
+  userId: string,
+  event: string,
+  data?: Record<string, unknown>,
+): Promise<void> {
+  const body = typeof data?.message === 'string' ? data.message : undefined;
+  if (!body) return;
+  const tokens = database.listPushTokens(userId);
+  if (tokens.length === 0) return;
+  const title =
+    event === 'toast:error'
+      ? 'Bridge error'
+      : event === 'toast:warning'
+        ? 'Bridge warning'
+        : 'Bridge';
+  try {
+    const res = await fetch(EXPO_PUSH_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(
+        tokens.map((to) => ({
+          to,
+          title,
+          body,
+          sound: 'default',
+          channelId: 'bridge-alerts',
+          data: { type: event === 'toast:error' ? 'error' : event === 'toast:warning' ? 'warning' : 'success' },
+        })),
+      ),
+    });
+    const receipts = (await res.json().catch(() => undefined)) as
+      | { data?: Array<{ status?: string; details?: { error?: string } }> }
+      | undefined;
+    receipts?.data?.forEach((receipt, i) => {
+      if (receipt?.details?.error === 'DeviceNotRegistered' && tokens[i]) {
+        database.deletePushToken(userId, tokens[i]);
+      }
+    });
+  } catch {}
+}
+
 export function createApp(
   database = new Database(),
   options: AppOptions = {},
@@ -3337,7 +3395,12 @@ export function createApp(
     if (event.startsWith('log:') && data) {
       database.createBridgeLog(userId, String(data.category ?? 'unknown'), data);
     }
-    if (!streams || streams.size === 0) return;
+    if (!streams || streams.size === 0) {
+      // No connected clients — the mobile app is closed, so fall back to
+      // remote push for user-facing toast events.
+      if (event.startsWith('toast:')) void sendExpoPush(database, userId, event, data);
+      return;
+    }
     const message = `event: ${event}\ndata: ${JSON.stringify(data ?? {})}\n\n`;
     for (const res of [...streams]) {
       try {
@@ -3361,7 +3424,13 @@ export function createApp(
   const authConfigured = Boolean(initialUserPassword && sessionSecret);
   const secureCookies = new URL(config.PUBLIC_BASE_URL).protocol === 'https:';
   const fetchImplementation = options.fetch ?? globalThis.fetch;
-  const traderspostRateLimiter = new TradersPostRateLimiter(250, options.traderspostRateLimitTaskTimeoutMs ?? 60_000);
+  const traderspostRateLimiter = new TradersPostRateLimiter(
+    250,
+    options.traderspostRateLimitTaskTimeoutMs ?? 60_000,
+    Number(process.env.TP_BREAKER_THRESHOLD) || 3,
+    Number(process.env.TP_BREAKER_BASE_MS) || 2_000,
+    Number(process.env.TP_BREAKER_MAX_MS) || 25_000,
+  );
   const forexFactoryCache = new Map<string, {
     expiresAt: number;
     payload: {
@@ -3540,6 +3609,38 @@ export function createApp(
     } catch {
       res.status(400).json({ error: 'Invalid model subscription request.' });
     }
+  });
+
+  app.post('/app/api/push-token', (req, res) => {
+    const session = requireWebSession(req, res);
+    if (!session) return;
+    const { csrfToken, token } = req.body ?? {};
+    if (typeof csrfToken !== 'string' || !validateCsrf(session, csrfToken)) {
+      res.status(403).json({ error: 'Invalid form token.' });
+      return;
+    }
+    if (typeof token !== 'string' || token.length < 10 || token.length > 200) {
+      res.status(400).json({ error: 'Invalid push token.' });
+      return;
+    }
+    database.upsertPushToken(session.userId, token);
+    res.json({ success: true });
+  });
+
+  app.post('/app/api/push-token/delete', (req, res) => {
+    const session = requireWebSession(req, res);
+    if (!session) return;
+    const { csrfToken, token } = req.body ?? {};
+    if (typeof csrfToken !== 'string' || !validateCsrf(session, csrfToken)) {
+      res.status(403).json({ error: 'Invalid form token.' });
+      return;
+    }
+    if (typeof token !== 'string' || token.length < 10 || token.length > 200) {
+      res.status(400).json({ error: 'Invalid push token.' });
+      return;
+    }
+    database.deletePushToken(session.userId, token);
+    res.json({ success: true });
   });
 
   app.get('/app/api/range/calendar', (req, res) => {
@@ -4131,6 +4232,8 @@ export function createApp(
       openTradeSanity: database.listOpenTradeSanity(userId),
       brokerOrders: enrichedBrokerOrders,
       processRuns: session.email === adminUserEmail ? database.listProcessRuns(20) : [],
+      // Dispatch lane telemetry — ops data, admin-scoped like processRuns.
+      dispatchQueues: session.email === adminUserEmail ? (app.locals.dispatchQueueStats?.() ?? []) : [],
     });
   });
 
@@ -8269,7 +8372,24 @@ export function createApp(
     const runInAccountQueue = context?.queueNext
       ? traderspostRateLimiter.runNext.bind(traderspostRateLimiter)
       : traderspostRateLimiter.run.bind(traderspostRateLimiter);
-    const updatedDelivery = await runInAccountQueue(delivery.accountId, async (limiterSignal) => {
+    // The send path swallows broker failures into the returned delivery —
+    // report the real outcome so the lane circuit breaker sees broker
+    // unavailability, not just thrown errors (watchdog releases).
+    const deliveryOutcome = (result: ProxyDelivery): 'success' | 'failure' | 'neutral' =>
+      result.status === 'traderspost_delivered' || result.status === 'extension_draft_created_and_traderspost_delivered'
+        ? 'success'
+        : result.status === 'traderspost_failed' || result.status === 'extension_draft_created_and_traderspost_failed'
+          ? 'failure'
+          : 'neutral';
+    // Lane key = the destination endpoint, not the account: ~20 accounts share
+    // one VPS/CT plugin, which serializes anyway — endpoint lanes give the
+    // pacing AND the circuit breaker the granularity that matches reality,
+    // while the outer account queue keeps per-account operation ordering.
+    const laneDestination = database.getTradersPostAccountDestination(delivery.accountId);
+    const dispatchLaneKey = laneDestination && isCrossTradeConfigured(laneDestination)
+      ? laneDestination.crossTradeWebhookUrl!
+      : (laneDestination?.webhookUrl ?? delivery.accountId);
+    const updatedDelivery = await runInAccountQueue(dispatchLaneKey, async (limiterSignal) => {
     // The outer queue task may have been watchdog-released while this send waited
     // on the per-account interval — the caller already recorded the failure, so
     // this queued work must bail instead of sending alongside the next task.
@@ -8423,7 +8543,7 @@ export function createApp(
           errorText: preparedPayloads.protectionError,
         });
         if (!isCrossTradeConfigured(destination)) {
-          emitToUser(delivery.userId, 'toast:error', { message: preparedPayloads.protectionError, persistent: true });
+          emitToUser(delivery.userId, 'toast:error', { message: preparedPayloads.protectionError, persistent: true, ...(context?.rangeName ? { rangeName: context.rangeName } : {}) });
         }
         return database.updateProxyDeliveryStatus(delivery.id, 'suppressed_guard')!;
       }
@@ -8599,6 +8719,7 @@ export function createApp(
           });
           emitToUser(delivery.userId, 'toast:warning', {
             persistent: true,
+            rangeName: requestRangeName,
             message: `${requestRangeName}: ${String(requestPayload.orderType ?? 'market')} entry blocked — stop-only mode, level already crossed`,
           });
           return database.updateProxyDeliveryStatus(delivery.id, tradersPostStatus(delivery, false))!;
@@ -8785,6 +8906,7 @@ export function createApp(
               emitToUser(delivery.userId, 'toast:error', {
                 message: `${destinationLabel} failed for ${accountName}${context?.rangeName ? ` · ${context.rangeName}` : ''}${signal ? ` · ${signal}` : ''}: ${reasonText}`,
                 persistent: true,
+                ...(context?.rangeName ? { rangeName: context.rangeName } : {}),
               });
             }
             // A sub-500 response carrying an explicit refusal message
@@ -8851,13 +8973,69 @@ export function createApp(
             emitToUser(delivery.userId, 'toast:error', {
               message: `${destinationLabel} failed for ${accountName}${context?.rangeName ? ` · ${context.rangeName}` : ''}${signal ? ` · ${signal}` : ''}: ${errorText}`,
               persistent: true,
+              ...(context?.rangeName ? { rangeName: context.rangeName } : {}),
             });
           }
           database.updateBrokerOrderStatus(delivery.accountId, activeBrokerOrderId, 'uncertain', errorText, delivery.id);
           // A failed/uncertain CT send still merits a book check — the order
           // may have reached NT8 despite the transport error.
           if (crossTrade) scheduleCtBookVerify(delivery.accountId);
-          return database.updateProxyDeliveryStatus(delivery.id, tradersPostStatus(delivery, false))!;
+          const finalDelivery = database.updateProxyDeliveryStatus(delivery.id, tradersPostStatus(delivery, false))!;
+          // Back-of-queue retry: re-enqueue this delivery after a delay for
+          // the same failure class the inline retry accepts. The status just
+          // written (…_failed) is in the sendable set, so the re-enqueued
+          // task passes the guard — and still re-reads it at send time, so a
+          // suppression landing during the delay kills the retry too.
+          // Deferred retries are flatten/cancel-only: an entry transport
+          // failure is already 'uncertain' (either POST may have reached the
+          // broker) and a further automatic resend risks duplicate exposure —
+          // ambiguous entries need reconciliation or explicit operator resend.
+          const deferredRetryable = isFlattenAction(requestPayload.action ?? parsed?.action)
+            && (isTransportFetchError(error) || isAbortFetchError(error));
+          const deferredAttemptCount = database.listProxyDeliveryAttempts(delivery.id).length;
+          // A lane in breaker cooldown already means the destination is down —
+          // piling deferred sends on top just deepens the backlog it must
+          // chew through when it recovers.
+          const laneCoolingDown = (traderspostRateLimiter.breakerState(crossTrade?.webhookUrl ?? destination.webhookUrl).cooldownUntilMs ?? 0) > Date.now();
+          if (deferredRetryable && !laneCoolingDown && deferredAttemptCount <= TRADERSPOST_DEFERRED_RETRIES + 1) {
+            const delayMs = (options.traderspostDeferredRetryBaseMs ?? TRADERSPOST_DEFERRED_RETRY_BASE_MS) * Math.max(1, deferredAttemptCount - 1);
+            console.info('[traderspost] Scheduling deferred retry', {
+              deliveryId: delivery.id,
+              accountId: delivery.accountId,
+              source: context?.source ?? 'proxy',
+              rangeName: context?.rangeName ?? null,
+              attempt: deferredAttemptCount,
+              delayMs,
+            });
+            emitToUser(delivery.userId, 'log:bridge', {
+              category: 'traderspost',
+              phase: 'error',
+              timestamp: new Date().toISOString(),
+              deliveryId: delivery.id,
+              accountId: delivery.accountId,
+              accountName,
+              source: context?.source ?? 'proxy',
+              rangeName: context?.rangeName ?? null,
+              errorText: `Deferred retry queued in ${Math.round(delayMs / 1000)}s (attempt ${deferredAttemptCount})`,
+              willRetry: true,
+              payload: requestPayload,
+            });
+            setTimeout(() => {
+              // Fresh task on the OUTER account queue — entering the inner
+              // limiter directly would let this retry slip between a running
+              // reapply/safeguard operation's cancel/exit/rearm steps. The
+              // fresh taskSignal keeps the watchdog semantics intact.
+              void reapply.queue.run(delivery.accountId, (taskSignal) =>
+                forwardToTradersPost(finalDelivery, payloadJson, { ...(context ?? {}), taskSignal, queueNext: false }),
+              ).catch((retryErr) => {
+                  console.warn('[traderspost] Deferred retry task failed', {
+                    deliveryId: delivery.id,
+                    error: retryErr instanceof Error ? retryErr.message : String(retryErr),
+                  });
+                });
+            }, delayMs).unref();
+          }
+          return finalDelivery;
         } finally {
           clearTimeout(timeout);
           clearTimeout(hardTimeoutHandle);
@@ -8866,6 +9044,7 @@ export function createApp(
       if (!crossTrade) {
         emitToUser(delivery.userId, 'toast:success', {
           message: `${destinationLabel} sent to ${accountName}${context?.rangeName ? ` for ${context.rangeName}` : ''}`,
+          ...(context?.rangeName ? { rangeName: context.rangeName } : {}),
         });
       }
       // The ACK only means CrossTrade received it — NT8 can still reject the
@@ -8892,6 +9071,7 @@ export function createApp(
               emitToUser(delivery.userId, 'toast:error', {
                 message: `Entry sent to ${accountName} for ${rangeName} but its take profit was not dispatched — reconcile and resend the pending delivery`,
                 persistent: true,
+                rangeName,
               });
             }
           } else {
@@ -8957,7 +9137,7 @@ export function createApp(
         });
       }
       return database.updateProxyDeliveryStatus(delivery.id, tradersPostStatus(delivery, true))!;
-    });
+    }, undefined, deliveryOutcome);
     await immediatePreciseTakeProfitPromise;
     return updatedDelivery;
   };
@@ -9491,7 +9671,80 @@ export function createApp(
     flattenMaxSends: options.reapplyFlattenMaxSends,
     flattenRetryDelayMs: options.reapplyFlattenRetryDelayMs,
   });
-  app.locals.recoverReapplyOperations = () => reapply.recover();
+  // Restart recovery: pending deliveries with zero attempts lost only their
+  // in-memory queue slot — no send ever reached the wire — so re-enqueue them
+  // through the normal queue path BEFORE the interrupted-dispatch sweep fails
+  // anything. Rows that did attempt keep the conservative outcome (failed /
+  // uncertain + operator reconcile), since a blind resend could double-order.
+  const resumePendingDispatches = async (): Promise<void> => {
+    const pending = database.listUnattemptedPendingDeliveries();
+    if (pending.length === 0) return;
+    console.info(JSON.stringify({ level: 'info', event: 'dispatchResume', resuming: pending.length }));
+    await Promise.all(pending.map(async (delivery) => {
+      const alert = database.findProxyAlert(delivery.proxyAlertId);
+      if (!alert) return;
+      await reapply.queue.run(delivery.accountId, (taskSignal) =>
+        forwardToTradersPost(delivery, alert.payloadJson, {
+          source: 'proxy',
+          userId: delivery.userId,
+          rangeName: alert.rangeName,
+          taskSignal,
+          // Same enablement re-check queued dispatches get: a destination or
+          // route disabled while the process was down must not send on resume.
+          preflight: () => {
+            if (!database.getTradersPostAccountDestination(delivery.accountId)?.enabled) {
+              return { allowed: false, reason: 'Destination was disabled while the process was down', status: 'routing_disabled' };
+            }
+            if (alert.rangeName && !database.findCurrentRangeRoute(delivery.rangeRouteId, delivery.accountId, alert.rangeName)?.traderspostEnabled) {
+              return { allowed: false, reason: 'Route was disabled while the process was down', status: 'routing_disabled' };
+            }
+            // Same duplicate-entry guard queued dispatches carry: two
+            // unattempted same-bracket entries must not both replay.
+            const recovered = (() => {
+              try {
+                return JSON.parse(alert.payloadJson) as { action?: string; bracketId?: string; bracketSide?: string };
+              } catch {
+                return undefined;
+              }
+            })();
+            if (alert.rangeName && (recovered?.action === 'buy' || recovered?.action === 'sell') && typeof recovered.bracketId === 'string') {
+              const side = recovered.bracketSide === 'short' ? 'short' as const : 'long' as const;
+              if (database.hasDeliveredEntryForBracket(delivery.accountId, alert.rangeName, recovered.bracketId, recovered.action, side)) {
+                const mon = database.findBracketMonitorEntry(delivery.accountId, alert.rangeName, recovered.bracketId, side);
+                if (!(mon && (mon.state === 'closed' || mon.state === 'cancelled'))) {
+                  return { allowed: false, reason: 'Entry for this bracket was already delivered', status: 'suppressed_duplicate' };
+                }
+              }
+            }
+            return { allowed: true };
+          },
+        }),
+      ).catch((err) => {
+        const errorText = err instanceof Error ? err.message : String(err);
+        database.createProxyDeliveryAttempt({
+          proxyDeliveryId: delivery.id,
+          success: false,
+          errorText,
+        });
+        for (const order of database.listBrokerOrdersForDelivery(delivery.id)) {
+          if (order.status === 'pending') {
+            database.updateBrokerOrderStatus(delivery.accountId, order.orderId, 'uncertain', errorText, delivery.id);
+          }
+        }
+        database.updateProxyDeliveryStatus(delivery.id, tradersPostStatus(delivery, false));
+      });
+    }));
+  };
+  app.locals.recoverReapplyOperations = async () => {
+    await resumePendingDispatches();
+    return reapply.recover();
+  };
+  // Lane telemetry shared by the monitoring payload and the heartbeat's
+  // crash forensics — queue depth is the first place dispatch trouble shows.
+  app.locals.dispatchQueueStats = () => [
+    ...traderspostRateLimiter.snapshot(),
+    ...reapply.queue.snapshot(),
+  ];
 
   const processProxyPayload = async (
     payload: z.infer<typeof proxyPayloadSchema>,
@@ -9600,7 +9853,16 @@ export function createApp(
       payloadJson: storedPayloadJson,
       ...(sourceReference ? { sourceReference } : {}),
     });
+    // Fan-out runs per-account-serial but cross-account-parallel: each route's
+    // dispatch + post-send bookkeeping is one task; the per-account queue
+    // preserves ordering while Promise.all collapses fan-out latency to the
+    // slowest lane instead of the sum of all lanes.
+    const deliveryTasks: Array<Promise<ProxyDelivery>> = [];
     const deliveries: ProxyDelivery[] = [];
+    // Kill switch: SERIAL_FANOUT=1 reverts to the pre-parallelism behavior
+    // (each route's dispatch awaited before the next is enqueued) without a
+    // redeploy — for bisecting if prod behavior surprises.
+    const serialFanout = process.env.SERIAL_FANOUT === '1';
     const extensionDraftIdsByPayloadKey = new Map<string, string>();
     const rangeReviewFlag = rangeName ? database.getRangeReviewFlag(rangeName) : undefined;
     const rangeRoutingDisabled = rangeReviewFlag?.reason === 'erroneous';
@@ -9624,6 +9886,7 @@ export function createApp(
       for (const userId of notifiedUserIds) {
         emitToUser(userId, 'toast:success', {
           message: `Alert received: ${payload.ticker} · ${payload.action} for ${rangeName}`,
+          rangeName,
         });
       }
       const rangeConfiguration = database.getRangeConfiguration(rangeName);
@@ -9806,95 +10069,108 @@ export function createApp(
           extensionEnabled: route.extensionEnabled,
           traderspostEnabled: route.traderspostEnabled,
           ...(draftId ? { draftId } : {}),
+          // Plain fan-out sends are safe to resume after a restart — they carry
+          // no operation-level guards. Specialized sends (reapply steps,
+          // precise-TP, EOD/news, safeguard) stay unmarked so recovery never
+          // replays them without their original preflights.
+          resumable: true,
           status,
         });
         // A wedged dispatch must not abort the fan-out — the remaining
         // accounts still need their delivery rows and queued sends.
-        const updatedDelivery = !routingSuppressed && route.traderspostEnabled && traderspostAccountEnabled && payload.action !== 'exit'
-          ? await reapply.queue.run(route.accountId, (taskSignal) => forwardToTradersPost(delivery, alert!.payloadJson, {
-            source: options?.lifecycleTestUserId && rangeName === 'Test Range' ? 'lifecycle_test' : 'proxy',
-            userId: route.userId,
-            rangeName,
-            taskSignal,
-            ...(forwardPreflight ? { preflight: forwardPreflight } : {}),
-          })).catch((err) => {
-            const errorText = err instanceof Error ? err.message : String(err);
-            console.warn('[traderspost] Queued dispatch failed', {
-              deliveryId: delivery.id,
-              accountId: route.accountId,
-              rangeName,
-              error: errorText,
-            });
-            // Ledger the interrupted attempt so a resend allocates the -r<n> order
-            // id instead of upserting over the uncertain row this attempt created.
-            database.createProxyDeliveryAttempt({
-              proxyDeliveryId: delivery.id,
-              success: false,
-              errorText,
-            });
-            for (const order of database.listBrokerOrdersForDelivery(delivery.id)) {
-              if (order.status === 'pending') {
-                database.updateBrokerOrderStatus(delivery.accountId, order.orderId, 'uncertain', errorText, delivery.id);
-              }
-            }
-            return database.updateProxyDeliveryStatus(delivery.id, tradersPostStatus(delivery, false))!;
-          })
-          : delivery;
-        emitToUser(route.userId, 'log:bridge', {
-          category: 'routing',
-          timestamp: new Date().toISOString(),
-          action: payload.action,
-          ticker: payload.ticker,
-          rangeName,
-          accountName: accountMeta?.name ?? 'Unknown',
-          accountId: route.accountId,
-          status: updatedDelivery.status,
-          suppressed: routingSuppressed || updatedDelivery.status.startsWith('suppressed_'),
-          traderspostEnabled: route.traderspostEnabled,
-          extensionEnabled: route.extensionEnabled,
-          deliveryId: delivery.id,
-        });
-        deliveries.push(updatedDelivery);
-        if (payload.action === 'cancel'
-          && (updatedDelivery.status === 'traderspost_delivered' || updatedDelivery.status === 'extension_draft_created_and_traderspost_delivered')
-        ) {
-          const cancelPayload = payload as { tradeId?: string; quantity?: number; bracketSide?: 'long' | 'short' };
-          if (
-            payload.cancelOrderType === 'stop'
-            && payload.extras?.reason === 'opposite_entry_filled'
-            && payload.bracketId
-            && cancelPayload.bracketSide
-          ) {
-            await sendPreciseTakeProfitCleanup({
-              route,
-              bracketId: payload.bracketId,
-              side: cancelPayload.bracketSide,
-              instrument: payload.ticker,
-              occurredAt: alert.receivedAt,
-              cleanupEventId: `proxy-cancel-${alert.id}`,
-              reason: 'precise_tp_opposite_entry_cleanup',
-              requireClosedLifecycle: true,
-            });
-          }
-          if (cancelPayload.tradeId && cancelPayload.quantity != null && cancelPayload.bracketSide) {
-            database.createTradeEvent({
+        const task = (async () => {
+          const queueRun = payload.action === 'cancel'
+            ? reapply.queue.runNext.bind(reapply.queue)
+            : reapply.queue.run.bind(reapply.queue);
+          const updatedDelivery = !routingSuppressed && route.traderspostEnabled && traderspostAccountEnabled && payload.action !== 'exit'
+            ? await queueRun(route.accountId, (taskSignal) => forwardToTradersPost(delivery, alert!.payloadJson, {
+              source: options?.lifecycleTestUserId && rangeName === 'Test Range' ? 'lifecycle_test' : 'proxy',
               userId: route.userId,
-              accountId: route.accountId,
               rangeName,
-              eventId: `proxy-cancel-${alert.id}-${randomUUID()}`,
-              tradeId: cancelPayload.tradeId,
-              eventType: 'entry_cancelled',
-              instrument: payload.ticker,
-              side: cancelPayload.bracketSide,
-              action: 'cancel',
-              quantity: cancelPayload.quantity,
-              occurredAt: new Date().toISOString(),
-              proxyAlertId: alert.id,
-            });
+              taskSignal,
+              ...(forwardPreflight ? { preflight: forwardPreflight } : {}),
+            })).catch((err) => {
+              const errorText = err instanceof Error ? err.message : String(err);
+              console.warn('[traderspost] Queued dispatch failed', {
+                deliveryId: delivery.id,
+                accountId: route.accountId,
+                rangeName,
+                error: errorText,
+              });
+              // Ledger the interrupted attempt so a resend allocates the -r<n> order
+              // id instead of upserting over the uncertain row this attempt created.
+              database.createProxyDeliveryAttempt({
+                proxyDeliveryId: delivery.id,
+                success: false,
+                errorText,
+              });
+              for (const order of database.listBrokerOrdersForDelivery(delivery.id)) {
+                if (order.status === 'pending') {
+                  database.updateBrokerOrderStatus(delivery.accountId, order.orderId, 'uncertain', errorText, delivery.id);
+                }
+              }
+              return database.updateProxyDeliveryStatus(delivery.id, tradersPostStatus(delivery, false))!;
+            })
+            : delivery;
+          emitToUser(route.userId, 'log:bridge', {
+            category: 'routing',
+            timestamp: new Date().toISOString(),
+            action: payload.action,
+            ticker: payload.ticker,
+            rangeName,
+            accountName: accountMeta?.name ?? 'Unknown',
+            accountId: route.accountId,
+            status: updatedDelivery.status,
+            suppressed: routingSuppressed || updatedDelivery.status.startsWith('suppressed_'),
+            traderspostEnabled: route.traderspostEnabled,
+            extensionEnabled: route.extensionEnabled,
+            deliveryId: delivery.id,
+          });
+          if (payload.action === 'cancel'
+            && (updatedDelivery.status === 'traderspost_delivered' || updatedDelivery.status === 'extension_draft_created_and_traderspost_delivered')
+          ) {
+            const cancelPayload = payload as { tradeId?: string; quantity?: number; bracketSide?: 'long' | 'short' };
+            if (
+              payload.cancelOrderType === 'stop'
+              && payload.extras?.reason === 'opposite_entry_filled'
+              && payload.bracketId
+              && cancelPayload.bracketSide
+            ) {
+              await sendPreciseTakeProfitCleanup({
+                route,
+                bracketId: payload.bracketId,
+                side: cancelPayload.bracketSide,
+                instrument: payload.ticker,
+                occurredAt: alert.receivedAt,
+                cleanupEventId: `proxy-cancel-${alert.id}`,
+                reason: 'precise_tp_opposite_entry_cleanup',
+                requireClosedLifecycle: true,
+              });
+            }
+            if (cancelPayload.tradeId && cancelPayload.quantity != null && cancelPayload.bracketSide) {
+              database.createTradeEvent({
+                userId: route.userId,
+                accountId: route.accountId,
+                rangeName,
+                eventId: `proxy-cancel-${alert.id}-${randomUUID()}`,
+                tradeId: cancelPayload.tradeId,
+                eventType: 'entry_cancelled',
+                instrument: payload.ticker,
+                side: cancelPayload.bracketSide,
+                action: 'cancel',
+                quantity: cancelPayload.quantity,
+                occurredAt: new Date().toISOString(),
+                proxyAlertId: alert.id,
+              });
+            }
           }
-        }
+          return updatedDelivery;
+        })();
+        if (serialFanout) deliveries.push(await task);
+        else deliveryTasks.push(task);
       }
     }
+    deliveries.push(...await Promise.all(deliveryTasks));
     return {
       alertId: alert.id,
       routes: deliveries.map(proxyDeliveryResponse),
@@ -11130,6 +11406,15 @@ export function createApp(
         if (!row.ownerStrategy?.name && !row.ownerStrategy?.displayName) return false;
         if ([row.id, row.orderId, row.userData, row.automatedTradingOrderId, row.name]
           .some((v) => typeof v === 'string' && openWireIds.has(v))) return false;
+        // Armed arm pairs aren't orphans: a strategy-owned ENTRY leg in an
+        // opposite-action Working OCO pair is an armed range, not a bracket
+        // leg left behind. A real orphan's partner is Filled/Cancelled (or
+        // never existed), so it can't satisfy this pairing.
+        if (row.ocoId && nt8Rows.some((other) => other !== row
+          && other.ocoId === row.ocoId
+          && String(other.orderState ?? '').toLowerCase() === 'working'
+          && String(other.instrument ?? '') === String(row.instrument ?? '')
+          && String(other.orderAction ?? '').toLowerCase() !== String(row.orderAction ?? '').toLowerCase())) return false;
         const inst = String(row.instrument ?? '');
         return inst === '' || !openInstruments.has(inst);
       });
@@ -11179,8 +11464,43 @@ export function createApp(
       && String(r.instrument ?? '') === String(nt8Row.instrument ?? '')
       && exitStates(r),
     );
+    // Fill-time leg signature diagnostics: dump the entry's sibling rows so
+    // we can see exactly how NT8 attributes protection legs (ocoId group vs
+    // ownerStrategy vs bare row). Once per entry per 46h — deduped across
+    // sweeps and restarts like the other sweep warnings.
+    const legSigKey = `legsig:${order.bracketId ?? nt8Row.id}`;
+    if (!database.hasBridgeLogEntry({
+      userId: account.userId, category: 'crosstrade', event: 'crossTradeLegSignature',
+      dedupKey: legSigKey, since: new Date(Date.now() - 46 * 3600_000).toISOString(),
+    })) {
+      const rowSig = (r: CrossTradeOrderRow) => ({
+        id: r.id, action: r.orderAction, type: r.orderType, state: r.orderState,
+        qty: r.quantity, filled: r.filled, stop: r.stopPrice, limit: r.limitPrice,
+        avg: r.averageFillPrice, ocoId: r.ocoId, name: r.name,
+        owner: r.ownerStrategy ? { id: r.ownerStrategy.id, name: r.ownerStrategy.name, displayName: r.ownerStrategy.displayName } : null,
+      });
+      database.createBridgeLog(account.userId, 'crosstrade', {
+        event: 'crossTradeLegSignature', dedupKey: legSigKey,
+        accountId: account.id, accountName: account.name,
+        rangeName: order.rangeName, bracketId: order.bracketId,
+        instrument: nt8Row.instrument,
+        entry: rowSig(nt8Row),
+        siblings: baseLegs.map(rowSig),
+      });
+    }
+    // Attribution keys off the ENTRY's owner, not the range name: NT8 marks
+    // every strategy-spawned leg with its strategy instance ('THE MAX WIN - 1'),
+    // and a strategy-owned filled entry carries that same owner. Legs sharing
+    // the entry's ownerStrategy are its protection — for BE ranges the owner
+    // IS the range name (atm_strategy), so the old behavior folds in. A
+    // bare webhook entry (owner null) has no strategy to match → price
+    // fallback below, which is also how an opposite-side ENTRY arm (same
+    // action as an exit leg) is kept out of the count.
+    const entryOwnerName = nt8Row.ownerStrategy?.name ?? nt8Row.ownerStrategy?.displayName;
     const ownedLegs = baseLegs.filter((r) =>
-      r.ownerStrategy?.name === strategyName || r.ownerStrategy?.displayName === strategyName);
+      entryOwnerName
+        ? r.ownerStrategy?.name === entryOwnerName || r.ownerStrategy?.displayName === entryOwnerName
+        : r.ownerStrategy?.name === strategyName || r.ownerStrategy?.displayName === strategyName);
     // For non-ATM entries a leg is attributable only when it's unattributed to
     // another strategy — a leg owned by a different range's ATM on the same
     // instrument must not count as this bracket's protection.
@@ -11189,16 +11509,31 @@ export function createApp(
     );
     const legs = ownedLegs.length > 0
       ? ownedLegs
-      : config?.breakEvenEnabled
-        ? []
+      : entryOwnerName
+        ? baseLegs.filter((r) => {
+            // Strategy-owned entry, ownerless leg: plausible only by qty +
+            // submission time — price can't be checked without the strategy's
+            // internal SL/TP, which the bridge never sees. Rows owned by THIS
+            // strategy are already in ownedLegs — a same-owner row reaching
+            // here is the opposite-side arm, not protection.
+            const owner = r.ownerStrategy?.name ?? r.ownerStrategy?.displayName;
+            if (owner === entryOwnerName) return false;
+            if (owner && otherRangeStrategies.has(owner)) return false;
+            const legQty = typeof r.quantity === 'number' ? r.quantity : undefined;
+            const entryQty = typeof nt8Row.filled === 'number' && nt8Row.filled > 0 ? nt8Row.filled : nt8Row.quantity;
+            if (legQty != null && typeof entryQty === 'number' && legQty > entryQty) return false;
+            const entryTime = Date.parse(String(nt8Row.time ?? ''));
+            const legTime = Date.parse(String(r.time ?? ''));
+            if (Number.isFinite(entryTime) && Number.isFinite(legTime) && legTime < entryTime) return false;
+            return true;
+          })
         : baseLegs.filter((r) => {
             const owner = r.ownerStrategy?.name ?? r.ownerStrategy?.displayName;
             if (owner && otherRangeStrategies.has(owner)) return false;
-            // Without ownerStrategy, a leg is only plausible protection when it
-            // covers no more than the entry's filled quantity, was submitted
-            // after the entry, AND sits at the level this range's configured
-            // SL/TP implies — an unrelated manual stop/target on the same
-            // instrument must not count as this bracket's protection.
+            // Ownerless entry → ownerless leg: the only discriminator vs an
+            // opposite-side arm or a manual order is price, so validate the
+            // leg against this range's configured SL/TP — an unrelated
+            // wrong-price leg must not suppress the warning.
             const legQty = typeof r.quantity === 'number' ? r.quantity : undefined;
             const entryQty = typeof nt8Row.filled === 'number' && nt8Row.filled > 0 ? nt8Row.filled : nt8Row.quantity;
             if (legQty != null && typeof entryQty === 'number' && legQty > entryQty) return false;
@@ -11221,10 +11556,10 @@ export function createApp(
           });
     const stopLeg = legs.find((r) => typeof r.stopPrice === 'number' && r.stopPrice !== 0);
     const targetLeg = legs.find((r) => typeof r.limitPrice === 'number' && r.limitPrice !== 0);
-    // Entry filled but no strategy-owned protection legs at all — the ATM
-    // strategy never spawned (or spawned detached). An unprotected position
-    // can't produce an attributable exit fill, so this is warn-worthy in its
-    // own right, not just when legs diverge from config.
+    // Entry filled but no protection legs anywhere in the book — the ATM
+    // strategy never spawned (or spawned detached), or the OCO legs died
+    // with the send. An unprotected position can't produce an attributable
+    // exit fill, so this warns for every filled entry regardless of mode.
     if (!stopLeg && !targetLeg) {
       if (atmMismatchWarned.has(warnKey)) return;
       // Persisted dedup — a restart re-checks every open bracket, so gate on

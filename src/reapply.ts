@@ -72,7 +72,13 @@ export class ReapplyCoordinator {
   private readonly flattenRetryDelayMs: number;
 
   constructor(private readonly database: Database, private readonly deps: Dependencies) {
-    this.queue = new TradersPostRateLimiter(0, deps.queueTaskTimeoutMs);
+    this.queue = new TradersPostRateLimiter(
+      0,
+      deps.queueTaskTimeoutMs,
+      Number(process.env.TP_BREAKER_THRESHOLD) || 3,
+      Number(process.env.TP_BREAKER_BASE_MS) || 2_000,
+      Number(process.env.TP_BREAKER_MAX_MS) || 25_000,
+    );
     this.flattenMaxSends = deps.flattenMaxSends ?? REAPPLY_FLATTEN_MAX_SENDS;
     this.flattenRetryDelayMs = deps.flattenRetryDelayMs ?? REAPPLY_FLATTEN_RETRY_DELAY_MS;
   }
